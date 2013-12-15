@@ -38,12 +38,13 @@
   <thead>
   <tr>
     <th>{% trans "Hostname" %}</th>
+    <th>{% trans "Key type" %}</th>
     <th>{% trans "Fingerprint" %}</th>
   </tr>
   </thead>
   <tbody>
     {% for key in host_keys %}
-    <tr class="row{% cycle 1,2 %}"><td>{{ key.0 }}</td><td>{{ key.1 }}</td></tr>
+    <tr class="row{% cycle 1,2 %}"><td>{{ key.0 }}</td><td>{{ key.1 }}</td><td>{{ key.2 }}</td></tr>
     {% endfor %}
   </tbody>
     </table>
@@ -56,7 +57,10 @@
     <form method="post">
     {% csrf_token %}
     <input type="hidden" name="action" value="add-host" />
-    <input type="text" name="host" /><br />
+    {% trans "Host:" %}
+    <input type="text" name="host" /> 
+    {% trans "Port:" %}
+    <input type="text" name="port" /><br />
     <input type="submit" value="{% trans "Submit" %}" />
     </form>
 

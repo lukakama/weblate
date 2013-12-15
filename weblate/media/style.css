@@ -312,3 +312,9 @@ img.engage-icon {
     width: 1px;
     white-space: nowrap;
 }
+.loading-icon {
+    text-align: center;
+}
+.translation-modified textarea {
+    border: 1px solid yellow;
+}

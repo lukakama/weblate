@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% load url from future %}
+{% load i18n %}
+{% load static %}
+
+{% block extra_meta %}
+<link rel="canonical" href="{{ unit.get_absolute_url }}" />
+{% endblock %}
+
+{% block breadcrumbs %}
+<li><a href="{{ object.subproject.project.get_absolute_url }}">{{ object.subproject.project }}</a></li>
+<li><a href="{{ object.subproject.get_absolute_url }}">{{ object.subproject.name }}</a></li>
+<li><a href="{{ object.get_absolute_url }}">{{ object.language }}</a></li>
+<li><a href="{{ object.get_translate_url }}">{% trans "zen" %}</a></li>
+{% endblock %}
+
+{% block content %}
+
+{% include "show-lock.html" %}
+
+<h2>{% trans "Translate" %}</h2>
+
+{% if filter_name %}
+<span class="navi-toolbar ui-widget-header ui-corner-all">
+{% blocktrans %}Current filter: {{ filter_name }} ({{ filter_count }}){% endblocktrans %}
+</span>
+{% endif %}
+
+<table class="zen">
+<tfoot>
+<tr><td colspan="3" class="loading-icon">
+<img src="{% get_media_prefix %}loading.gif" id="loading-next" style="display: none" />
+<a href="{% url 'load_zen' project=object.subproject.project.slug subproject=object.subproject.slug lang=object.language.code %}" class="hidden" id="zen-load" data-offset="0"></a>
+<a href="{% url 'js-lock' project=object.subproject.project.slug subproject=object.subproject.slug lang=object.language.code %}" class="hidden" id="js-lock"></a>
+</td></tr>
+</tfoot>
+<tbody>
+{% include 'zen-units.html' %}
+</tbody>
+</table>
+
+{% endblock %}

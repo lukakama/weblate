@@ -1,5 +1,5 @@
 Name:           weblate
-Version: 1.8
+Version: 1.9
 Release:        1
 License:        GPL-3+
 Summary:        Web-based translation tool
@@ -12,12 +12,12 @@ BuildRequires:  graphviz-gd
 Url:            http://weblate.org/
 Requires:       apache2-mod_wsgi
 Requires:       cron
-Requires:       python-django >= 1.4
-Requires:       python-social-auth >= 0.1
+Requires:       python-django >= 1.5
+Requires:       python-python-social-auth >= 0.1.17
 Requires:       translate-toolkit >= 1.10.0
-Requires:       python-GitPython >= 0.3
-Requires:       python-whoosh >= 2.5
-Requires:       python-imaging
+Requires:       python-GitPython >= 0.3.2
+Requires:       python-whoosh >= 2.5.2
+Requires:       python-Pillow
 Requires:       python-South >= 0.7
 %py_requires
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
