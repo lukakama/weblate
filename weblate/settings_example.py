@@ -84,7 +84,7 @@ LANGUAGES = (
     ('da', 'Dansk'),
     ('de', 'Deutsch'),
     ('en', 'English'),
-    ('el', 'Ελληνικά'),
+    ('el', u'Ελληνικά'),
     ('es', u'Español'),
     ('fi', 'Suomi'),
     ('fr', u'Français'),
@@ -165,6 +165,48 @@ TEMPLATE_LOADERS = (
     'django.template.loaders.app_directories.Loader',
 )
 
+# Authentication configuration
+AUTHENTICATION_BACKENDS = (
+    'social.backends.google.GoogleOpenId',
+    'social.backends.email.EmailAuth',
+    #'social.backends.github.GithubOAuth2',
+    #'social.backends.suse.OpenSUSEOpenId',
+    # Needed for Django 1.6:
+    #'social.apps.django_app.utils.BackendWrapper',
+    'accounts.auth.WeblateUserBackend',
+)
+
+# Social auth backends setup
+SOCIAL_AUTH_GITHUB_KEY = ''
+SOCIAL_AUTH_GITHUB_SECRET = ''
+SOCIAL_AUTH_GITHUB_SCOPE = ['user:email']
+
+# Social auth settings
+SOCIAL_AUTH_PIPELINE = (
+    'social.pipeline.social_auth.social_details',
+    'social.pipeline.social_auth.social_uid',
+    'social.pipeline.social_auth.auth_allowed',
+    'social.pipeline.social_auth.associate_by_email',
+    'social.pipeline.social_auth.social_user',
+    'social.pipeline.user.get_username',
+    'accounts.pipeline.require_email',
+    'social.pipeline.mail.mail_validation',
+    'social.pipeline.social_auth.associate_by_email',
+    'accounts.pipeline.verify_open',
+    'social.pipeline.user.create_user',
+    'social.pipeline.social_auth.associate_user',
+    'social.pipeline.social_auth.load_extra_data',
+    'social.pipeline.user.user_details',
+    'accounts.pipeline.store_email',
+)
+
+SOCIAL_AUTH_EMAIL_VALIDATION_FUNCTION = 'accounts.pipeline.send_validation'
+SOCIAL_AUTH_EMAIL_VALIDATION_URL = '%s/accounts/email-sent/' % URL_PREFIX
+SOCIAL_AUTH_LOGIN_ERROR_URL = '%s/accounts/login/' % URL_PREFIX
+SOCIAL_AUTH_EMAIL_FORM_URL = '%s/accounts/email/' % URL_PREFIX
+SOCIAL_AUTH_PROTECTED_USER_FIELDS = ('email',)
+
+# Middleware
 MIDDLEWARE_CLASSES = (
     'django.middleware.common.CommonMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -172,6 +214,7 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'social.apps.django_app.middleware.SocialAuthExceptionMiddleware',
     'accounts.middleware.RequireLoginMiddleware',
 )
 
@@ -195,7 +238,7 @@ INSTALLED_APPS = (
     'django.contrib.admin',
     'django.contrib.admindocs',
     'django.contrib.sitemaps',
-    'registration',
+    'social.apps.django_app.default',
     'south',
     'trans',
     'lang',
@@ -215,18 +258,12 @@ TEMPLATE_CONTEXT_PROCESSORS = (
     'django.core.context_processors.request',
     'django.core.context_processors.csrf',
     'django.contrib.messages.context_processors.messages',
-    'trans.context_processors.version',
-    'trans.context_processors.weblate_url',
-    'trans.context_processors.title',
-    'trans.context_processors.date',
-    'trans.context_processors.url',
-    'trans.context_processors.machine_translations',
-    'trans.context_processors.registration',
+    'trans.context_processors.weblate_context',
 )
 
 # Custom exception reporter to include some details
 DEFAULT_EXCEPTION_REPORTER_FILTER = \
-    'weblate.debug.WeblateExceptionReporterFilter'
+    'trans.debug.WeblateExceptionReporterFilter'
 
 # Default logging of Weblate messages
 # - to syslog in production (if available)
@@ -281,6 +318,7 @@ LOGGING = {
             'address': '/dev/log',
             'facility': SysLogHandler.LOG_LOCAL2,
         },
+        # Logging to a file
         #'logfile': {
         #    'level':'DEBUG',
         #    'class':'logging.handlers.RotatingFileHandler',
@@ -296,6 +334,11 @@ LOGGING = {
             'level': 'ERROR',
             'propagate': True,
         },
+        # Logging database queries
+        #'django.db.backends': {
+        #    'handlers': [DEFAULT_LOG],
+        #    'level': 'DEBUG',
+        #},
         'weblate': {
             'handlers': [DEFAULT_LOG],
             'level': 'DEBUG',
@@ -349,11 +392,11 @@ LOGOUT_URL = '%s/accounts/logout/' % URL_PREFIX
 # Default location for login
 LOGIN_REDIRECT_URL = '%s/' % URL_PREFIX
 
-# How long activation mail is valid
-ACCOUNT_ACTIVATION_DAYS = 7
-
 # Profile module
 AUTH_PROFILE_MODULE = 'accounts.Profile'
+
+# Anonymous user name
+ANONYMOUS_USER_NAME = 'anonymous'
 
 # Sending HTML in mails
 EMAIL_SEND_HTML = False
@@ -408,6 +451,7 @@ WHOOSH_INDEX = os.path.join(WEB_ROOT, 'whoosh-index')
 #    'trans.checks.markup.XMLTagsCheck',
 #    'trans.checks.source.OptionalPluralCheck',
 #    'trans.checks.source.EllipsisCheck',
+#    'trans.checks.source.MultipleFailingCheck',
 #)
 
 # List of automatic fixups

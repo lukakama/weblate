@@ -50,6 +50,7 @@ SAME_BLACKLIST = frozenset((
     'applet',
     'appliance',
     'appliances',
+    'aptitude',
     'attribute',
     'attribution',
     'atom',
@@ -62,6 +63,7 @@ SAME_BLACKLIST = frozenset((
     'bios',
     'bit',
     'bitcoin',
+    'bitmap',
     'block',
     'blog',
     'bluetooth',
@@ -84,6 +86,7 @@ SAME_BLACKLIST = frozenset((
     'control',
     'copyright',
     'criteria',
+    'csd',
     'csv',
     'ctrl',
     'ctrl+d',
@@ -104,6 +107,7 @@ SAME_BLACKLIST = frozenset((
     'designer',
     'detail',
     'details',
+    'ding',
     'distribution',
     'distro',
     'dm',
@@ -126,11 +130,13 @@ SAME_BLACKLIST = frozenset((
     'email',
     'engine',
     'engines',
+    'enterprise',
     'esperanto',
     'exchange',
     'expert',
     'export',
     'extra',
+    'fanfare',
     'farm',
     'fauna',
     'fax',
@@ -149,17 +155,23 @@ SAME_BLACKLIST = frozenset((
     'fulltext',
     'gammu',
     'general',
+    'gentoo',
     'gettext',
     'global',
+    'gnu',
     'google',
     'gib',
     'git',
+    'gpl',
     'graphic',
     'graphics',
     'gtk',
     'gzip',
-    'headset',
+    'hack',
+    'hacks',
     'hardware',
+    'hashed',
+    'headset',
     'help',
     'hmpf',
     'horizontal',
@@ -177,6 +189,7 @@ SAME_BLACKLIST = frozenset((
     'irc',
     'irda',
     'image',
+    'imap',
     'imei',
     'imsi',
     'import',
@@ -235,6 +248,7 @@ SAME_BLACKLIST = frozenset((
     'ma',
     'mah',
     'manager',
+    'manual',
     'mailbox',
     'mailboxes',
     'maildir',
@@ -318,6 +332,7 @@ SAME_BLACKLIST = frozenset((
     'pre-commit',
     'prince',
     'process',
+    'profiling',
     'program',
     'project',
     'promotion',
@@ -334,6 +349,7 @@ SAME_BLACKLIST = frozenset((
     'questions',
     'realm',
     'rebase',
+    'redhat',
     'repository',
     'reset',
     'resource',
@@ -382,6 +398,7 @@ SAME_BLACKLIST = frozenset((
     'sum',
     'sunos',
     'support',
+    'suse',
     'svg',
     'symbol',
     'syndication',
@@ -389,6 +406,7 @@ SAME_BLACKLIST = frozenset((
     'swap',
     'table',
     'tables',
+    'tada',
     'tbx',
     'termbase',
     'test',
@@ -434,6 +452,7 @@ SAME_BLACKLIST = frozenset((
     'widget',
     'widgets',
     'wiki',
+    'wildcard',
     'windows',
     'word',
     'www',
@@ -476,6 +495,12 @@ SAME_BLACKLIST = frozenset((
     'fr',
     'sa',
     'su',
+
+    # Roman numbers
+    'ii',
+    'iii',
+    'iv',
+    'vi',
 
     # Architectures
     'alpha',
@@ -552,10 +577,12 @@ SAME_BLACKLIST = frozenset((
     'kazakh',
     'khmer',
     'kirghiz',
+    'klingon',
     'korean',
     'kurdish',
     'lao',
     'latvian',
+    'limburgish',
     'lingala',
     'lithuanian',
     'luxembourgish',
@@ -581,8 +608,10 @@ SAME_BLACKLIST = frozenset((
     'papiamento',
     'pedi',
     'persian',
+    'piqad',
     'piemontese',
     'polish',
+    'portugal',
     'portuguese',
     'punjabi',
     'pushto',
@@ -603,6 +632,7 @@ SAME_BLACKLIST = frozenset((
     'swahili',
     'swedish',
     'tajik',
+    'tagalog',
     'tamil',
     'tatar',
     'telugu',
@@ -615,6 +645,7 @@ SAME_BLACKLIST = frozenset((
     'ukrainian',
     'urdu',
     'uzbek',
+    'valencian',
     'venda',
     'vietnamese',
     'walloon',
@@ -623,6 +654,9 @@ SAME_BLACKLIST = frozenset((
     'yakut',
     'yoruba',
     'zulu',
+
+    # whole alphabet
+    'abcdefghijklmnopqrstuvwxyz',
 ))
 
 URL_RE = re.compile(
@@ -728,6 +762,11 @@ class SameCheck(TargetCheck):
 
         # Cleanup trailing/leading chars
         stripped = self.strip_chars(stripped)
+
+        # Replace punctation by whitespace for splitting
+        stripped = stripped.replace(
+            ',', ' '
+        )
 
         return stripped
 

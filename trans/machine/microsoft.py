@@ -18,6 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from datetime import datetime, timedelta
 from trans.machine.base import MachineTranslation, MachineTranslationError
 from django.core.exceptions import ImproperlyConfigured
 from weblate import appsettings
@@ -25,6 +26,7 @@ from weblate import appsettings
 BASE_URL = 'http://api.microsofttranslator.com/V2/Ajax.svc/'
 TRANSLATE_URL = BASE_URL + 'Translate'
 LIST_URL = BASE_URL + 'GetLanguagesForTranslate'
+TOKEN_EXPIRY = timedelta(minutes=9)
 
 
 def microsoft_translation_supported():
@@ -49,36 +51,44 @@ class MicrosoftTranslation(MachineTranslation):
         '''
         super(MicrosoftTranslation, self).__init__()
         self._access_token = None
+        self._token_expiry = None
         if not microsoft_translation_supported():
             raise ImproperlyConfigured(
                 'Microsoft Translator requires credentials'
             )
+
+    def is_token_expired(self):
+        '''
+        Checks whether token is about to expire.
+        '''
+        return self._token_expiry <= datetime.now()
 
     @property
     def access_token(self):
         '''
         Obtains and caches access token.
         '''
-        if self._access_token is not None:
-            return self._access_token
-
-        data = self.json_req(
-            'https://datamarket.accesscontrol.windows.net/v2/OAuth2-13',
-            skip_auth=True,
-            http_post=True,
-            client_id=appsettings.MT_MICROSOFT_ID,
-            client_secret=appsettings.MT_MICROSOFT_SECRET,
-            scope='http://api.microsofttranslator.com',
-            grant_type='client_credentials',
-        )
-
-        if 'error' in data:
-            raise MachineTranslationError(
-                data.get('error', 'Unknown Error') +
-                data.get('error_description', 'No Error Description')
+        if self._access_token is None or self.is_token_expired():
+            data = self.json_req(
+                'https://datamarket.accesscontrol.windows.net/v2/OAuth2-13',
+                skip_auth=True,
+                http_post=True,
+                client_id=appsettings.MT_MICROSOFT_ID,
+                client_secret=appsettings.MT_MICROSOFT_SECRET,
+                scope='http://api.microsofttranslator.com',
+                grant_type='client_credentials',
             )
 
-        return data['access_token']
+            if 'error' in data:
+                raise MachineTranslationError(
+                    data.get('error', 'Unknown Error') +
+                    data.get('error_description', 'No Error Description')
+                )
+
+            self._access_token = data['access_token']
+            self._token_expiry = datetime.now() + TOKEN_EXPIRY
+
+        return self._access_token
 
     def authenticate(self, request):
         '''
@@ -108,8 +118,7 @@ class MicrosoftTranslation(MachineTranslation):
         '''
         Downloads list of supported languages from a service.
         '''
-        data = self.json_req(LIST_URL)
-        return data
+        return self.json_req(LIST_URL)
 
     def download_translations(self, language, text, unit, user):
         '''
@@ -117,7 +126,7 @@ class MicrosoftTranslation(MachineTranslation):
         '''
         args = {
             'text': text[:5000].encode('utf-8'),
-            'from': 'en',
+            'from': appsettings.SOURCE_LANGUAGE,
             'to': language,
             'contentType': 'text/plain',
             'category': 'general',

@@ -18,25 +18,52 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from django.shortcuts import render_to_response, get_object_or_404
+from django.shortcuts import render_to_response, get_object_or_404, redirect
 from django.template import RequestContext
 from django.conf import settings
 from django.contrib import messages
 from django.utils.translation import ugettext as _
-from django.http import HttpResponseRedirect
 from django.contrib.auth.decorators import login_required
 from django.core.mail.message import EmailMultiAlternatives
 from django.utils import translation
-from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
+from django.contrib.auth.views import login, logout
 from django.views.generic import TemplateView
 from urllib import urlencode
+
+from accounts.forms import (
+    RegistrationForm, PasswordForm, PasswordChangeForm, EmailForm, ResetForm,
+    LoginForm, HostingForm, CaptchaRegistrationForm
+)
+from social.backends.utils import load_backends
+from social.apps.django_app.utils import BACKENDS
+from social.apps.django_app.views import complete
 
 from accounts.models import set_lang, Profile
 from trans.models import Change, Project
 from accounts.forms import (
     ProfileForm, SubscriptionForm, UserForm, ContactForm
 )
+from weblate import appsettings
+
+CONTACT_TEMPLATE = '''
+Message from %(name)s <%(email)s>:
+
+%(message)s
+'''
+
+HOSTING_TEMPLATE = '''
+%(name)s <%(email)s> wants to host %(project)s
+
+Project:    %(project)s
+Website:    %(url)s
+Repository: %(repo)s
+Filemask:   %(mask)s
+
+Additional message:
+
+%(message)s
+'''
 
 
 class RegistrationTemplateView(TemplateView):
@@ -54,8 +81,7 @@ class RegistrationTemplateView(TemplateView):
         return context
 
 
-def mail_admins_sender(subject, message, sender, fail_silently=False,
-                       connection=None, html_message=None):
+def mail_admins_contact(subject, message, context, sender):
     '''
     Sends a message to the admins, as defined by the ADMINS setting.
     '''
@@ -63,15 +89,13 @@ def mail_admins_sender(subject, message, sender, fail_silently=False,
         return
 
     mail = EmailMultiAlternatives(
-        u'%s%s' % (settings.EMAIL_SUBJECT_PREFIX, subject),
-        message, sender, [a[1] for a in settings.ADMINS],
-        connection=connection
+        u'%s%s' % (settings.EMAIL_SUBJECT_PREFIX, subject % context),
+        message % context,
+        to=[a[1] for a in settings.ADMINS],
+        headers={'Reply-To': sender},
     )
 
-    if html_message:
-        mail.attach_alternative(html_message, 'text/html')
-
-    mail.send(fail_silently=fail_silently)
+    mail.send(fail_silently=False)
 
 
 @login_required
@@ -93,6 +117,13 @@ def user_profile(request):
             request.POST,
             instance=request.user
         )
+        if appsettings.DEMO_SERVER and request.user.username == 'demo':
+            messages.warning(
+                request,
+                _('You can not change demo profile on the demo server.')
+            )
+            return redirect('profile')
+
         if (form.is_valid()
                 and userform.is_valid()
                 and subscriptionform.is_valid()):
@@ -105,7 +136,7 @@ def user_profile(request):
             set_lang(request.user, request=request, user=request.user)
 
             # Redirect after saving (and possibly changing language)
-            response = HttpResponseRedirect(reverse('profile'))
+            response = redirect('profile')
 
             # Set language cookie and activate new language (for message below)
             lang_code = profile.language
@@ -126,14 +157,30 @@ def user_profile(request):
             instance=request.user
         )
 
-    response = render_to_response('profile.html', RequestContext(request, {
-        'form': form,
-        'userform': userform,
-        'subscriptionform': subscriptionform,
-        'profile': profile,
-        'title': _('User profile'),
-        'licenses': Project.objects.exclude(license=''),
-    }))
+    social = request.user.social_auth.all()
+    social_names = [assoc.provider for assoc in social]
+    all_backends = set(load_backends(BACKENDS).keys())
+    new_backends = [
+        x for x in all_backends
+        if x == 'email' or x not in social_names
+    ]
+
+    response = render_to_response(
+        'accounts/profile.html',
+        RequestContext(
+            request,
+            {
+                'form': form,
+                'userform': userform,
+                'subscriptionform': subscriptionform,
+                'profile': profile,
+                'title': _('User profile'),
+                'licenses': Project.objects.exclude(license=''),
+                'associated': social,
+                'new_backends': new_backends,
+            }
+        )
+    )
     response.set_cookie(
         settings.LANGUAGE_COOKIE_NAME,
         profile.language
@@ -141,37 +188,85 @@ def user_profile(request):
     return response
 
 
+def get_initial_contact(request):
+    '''
+    Fills in initial contact form fields from request.
+    '''
+    initial = {}
+    if request.user.is_authenticated():
+        initial['name'] = request.user.get_full_name()
+        initial['email'] = request.user.email
+    return initial
+
+
 def contact(request):
     if request.method == 'POST':
         form = ContactForm(request.POST)
         if form.is_valid():
-            mail_admins_sender(
-                form.cleaned_data['subject'],
-                'Message from %s <%s>:\n\n%s' % (
-                    form.cleaned_data['name'],
-                    form.cleaned_data['email'],
-                    form.cleaned_data['message']
-                ),
+            mail_admins_contact(
+                '%(subject)s',
+                CONTACT_TEMPLATE,
+                form.cleaned_data,
                 form.cleaned_data['email'],
             )
             messages.info(
                 request,
                 _('Message has been sent to administrator.')
             )
-            return HttpResponseRedirect(reverse('home'))
+            return redirect('home')
     else:
-        initial = {}
-        if request.user.is_authenticated():
-            initial['name'] = request.user.get_full_name()
-            initial['email'] = request.user.email
+        initial = get_initial_contact(request)
         if 'subject' in request.GET:
             initial['subject'] = request.GET['subject']
         form = ContactForm(initial=initial)
 
-    return render_to_response('contact.html', RequestContext(request, {
-        'form': form,
-        'title': _('Contact'),
-    }))
+    return render_to_response(
+        'accounts/contact.html',
+        RequestContext(
+            request,
+            {
+                'form': form,
+                'title': _('Contact'),
+            }
+        )
+    )
+
+
+def hosting(request):
+    '''
+    Form for hosting request.
+    '''
+    if not appsettings.OFFER_HOSTING:
+        return redirect('home')
+
+    if request.method == 'POST':
+        form = HostingForm(request.POST)
+        if form.is_valid():
+            mail_admins_contact(
+                'Hosting request for %(project)s',
+                HOSTING_TEMPLATE,
+                form.cleaned_data,
+                form.cleaned_data['email'],
+            )
+            messages.info(
+                request,
+                _('Message has been sent to administrator.')
+            )
+            return redirect('home')
+    else:
+        initial = get_initial_contact(request)
+        form = HostingForm(initial=initial)
+
+    return render_to_response(
+        'accounts/hosting.html',
+        RequestContext(
+            request,
+            {
+                'form': form,
+                'title': _('Hosting'),
+            }
+        )
+    )
 
 
 def user_page(request, user):
@@ -200,15 +295,196 @@ def user_page(request, user):
     user_projects = Project.objects.filter(id__in=user_projects_ids)
 
     return render_to_response(
-        'user.html',
+        'accounts/user.html',
         RequestContext(
             request,
             {
                 'page_profile': profile,
                 'page_user': user,
                 'last_changes': last_changes,
-                'last_changes_url': urlencode({'user': user.username}),
+                'last_changes_url': urlencode(
+                    {'user': user.username.encode('utf-8')}
+                ),
                 'user_projects': user_projects,
+            }
+        )
+    )
+
+
+def weblate_login(request):
+    '''
+    Login handler, just wrapper around login.
+    '''
+
+    # Redirect logged in users to profile
+    if request.user.is_authenticated():
+        return redirect('profile')
+
+    if 'message' in request.GET:
+        messages.info(request, request.GET['message'])
+
+    return login(
+        request,
+        template_name='accounts/login.html',
+        authentication_form=LoginForm,
+        extra_context={
+            'login_backends': [
+                x for x in load_backends(BACKENDS).keys() if x != 'email'
+            ],
+            'title': _('Login'),
+        }
+    )
+
+
+@login_required
+def weblate_logout(request):
+    '''
+    Logout handler, just wrapper around standard logout.
+    '''
+    messages.info(request, _('Thanks for using Weblate!'))
+
+    return logout(
+        request,
+        next_page=settings.LOGIN_URL,
+    )
+
+
+def register(request):
+    '''
+    Registration form.
+    '''
+    if appsettings.REGISTRATION_CAPTCHA:
+        form_class = CaptchaRegistrationForm
+    else:
+        form_class = RegistrationForm
+
+    if request.method == 'POST':
+        form = form_class(request.POST)
+        if form.is_valid() and appsettings.REGISTRATION_OPEN:
+            return complete(request, 'email')
+    else:
+        form = form_class()
+
+    backends = set(load_backends(BACKENDS).keys())
+
+    return render_to_response(
+        'accounts/register.html',
+        RequestContext(
+            request,
+            {
+                'registration_email': 'email' in backends,
+                'registration_backends': backends - set(['email']),
+                'title': _('User registration'),
+                'form': form,
+            }
+        )
+    )
+
+
+@login_required
+def email_login(request):
+    '''
+    Connect email.
+    '''
+    if request.method == 'POST':
+        form = EmailForm(request.POST)
+        if form.is_valid():
+            return complete(request, 'email')
+    else:
+        form = EmailForm()
+
+    return render_to_response(
+        'accounts/email.html',
+        RequestContext(
+            request,
+            {
+                'title': _('Register email'),
+                'form': form,
+            }
+        )
+    )
+
+
+@login_required
+def password(request):
+    '''
+    Password change / set form.
+    '''
+
+    do_change = False
+
+    if request.user.has_usable_password():
+        if request.method == 'POST':
+            change_form = PasswordChangeForm(request.POST)
+            if change_form.is_valid():
+                cur_password = change_form.cleaned_data['password']
+                if request.user.check_password(cur_password):
+                    do_change = True
+                else:
+                    messages.error(
+                        request,
+                        _('You have entered an invalid password.')
+                    )
+        else:
+            change_form = PasswordChangeForm()
+    else:
+        do_change = True
+        change_form = None
+
+    if request.method == 'POST':
+        form = PasswordForm(request.POST)
+        if form.is_valid() and do_change:
+
+            # Clear flag forcing user to set password
+            if 'show_set_password' in request.session:
+                del request.session['show_set_password']
+
+            request.user.set_password(
+                form.cleaned_data['password1']
+            )
+            request.user.save()
+            messages.info(
+                request,
+                _('Your password has been changed.')
+            )
+            return redirect('profile')
+    else:
+        form = PasswordForm()
+
+    return render_to_response(
+        'accounts/password.html',
+        RequestContext(
+            request,
+            {
+                'title': _('Change password'),
+                'change_form': change_form,
+                'form': form,
+            }
+        )
+    )
+
+
+def reset_password(request):
+    '''
+    Password reset handling.
+    '''
+    if request.method == 'POST':
+        form = ResetForm(request.POST)
+        if form.is_valid():
+            user = form.cleaned_data['email']
+            user.set_unusable_password()
+            user.save()
+            return complete(request, 'email')
+    else:
+        form = ResetForm()
+
+    return render_to_response(
+        'accounts/reset.html',
+        RequestContext(
+            request,
+            {
+                'title': _('Password reset'),
+                'form': form,
             }
         )
     )

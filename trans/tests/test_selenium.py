@@ -2,6 +2,7 @@ from django.test import LiveServerTestCase
 from django.utils.unittest import SkipTest
 from selenium import webdriver
 from django.core.urlresolvers import reverse
+from django.contrib.auth.models import User
 import os
 import new
 import json
@@ -27,11 +28,11 @@ class SeleniumTests(LiveServerTestCase):
         connection = httplib.HTTPConnection("saucelabs.com")
         connection.request(
             'PUT',
-            '/rest/v1/%s/jobs/%s' % (
+            '/rest/v1/{}/jobs/{}'.format(
                 self.username, self.driver.session_id
             ),
             body_content,
-            headers={"Authorization": "Basic %s" % self.sauce_auth}
+            headers={"Authorization": "Basic {}".format(self.sauce_auth)}
         )
         result = connection.getresponse()
         return result.status == 200
@@ -40,13 +41,14 @@ class SeleniumTests(LiveServerTestCase):
         if result is None:
             result = self.defaultTestResult()
 
-        errors = result.errors
-        failures = result.failures
+        errors = len(result.errors)
+        failures = len(result.failures)
         super(SeleniumTests, self).run(result)
 
         if DO_SELENIUM:
             self.set_test_status(
-                (errors == result.errors and failures == result.failures)
+                errors == len(result.errors)
+                and failures == len(result.failures)
             )
 
     @classmethod
@@ -58,8 +60,8 @@ class SeleniumTests(LiveServerTestCase):
                 cls.caps['tunnel-identifier'] = os.environ['TRAVIS_JOB_NUMBER']
                 cls.caps['build'] = os.environ['TRAVIS_BUILD_NUMBER']
                 cls.caps['tags'] = [
-                    'python-%s' % os.environ['TRAVIS_PYTHON_VERSION'],
-                    'django-%s' % os.environ['DJANGO_VERSION'],
+                    'python-{}'.format(os.environ['TRAVIS_PYTHON_VERSION']),
+                    'django-{}'.format(os.environ['DJANGO_VERSION']),
                     os.environ['TRAVIS_DATABASE'],
                     'CI'
                 ]
@@ -68,15 +70,15 @@ class SeleniumTests(LiveServerTestCase):
             cls.username = os.environ['SAUCE_USERNAME']
             cls.key = os.environ['SAUCE_ACCESS_KEY']
             cls.sauce_auth = base64.encodestring(
-                '%s:%s' % (cls.username, cls.key)
+                '{}:{}'.format(cls.username, cls.key)
             )[:-1]
-            hub_url = "%s:%s@localhost:4445" % (cls.username, cls.key)
+            hub_url = "{}:{}@localhost:4445".format(cls.username, cls.key)
             cls.driver = webdriver.Remote(
                 desired_capabilities=cls.caps,
-                command_executor="http://%s/wd/hub" % hub_url
+                command_executor="http://{}/wd/hub".format(hub_url)
             )
             jobid = cls.driver.session_id
-            print "Sauce Labs job: https://saucelabs.com/jobs/%s" % jobid
+            print 'Sauce Labs job: https://saucelabs.com/jobs/{}'.format(jobid)
         super(SeleniumTests, cls).setUpClass()
 
     def setUp(self):
@@ -91,53 +93,82 @@ class SeleniumTests(LiveServerTestCase):
             cls.driver.quit()
 
     def test_login(self):
-        self.driver.get('%s%s' % (self.live_server_url, reverse('auth_login')))
+        # open home page
+        self.driver.get('{}{}'.format(self.live_server_url, reverse('home')))
 
-        username_input = self.driver.find_element_by_name('username')
-        username_input.send_keys("myuser")
-        password_input = self.driver.find_element_by_name('password')
-        password_input.send_keys("secret")
+        # login page
+        self.driver.find_element_by_id('login-button').click()
+
+        username_input = self.driver.find_element_by_id('id_username')
+        username_input.send_keys('testuser')
+        password_input = self.driver.find_element_by_id('id_password')
+        password_input.send_keys('secret')
         self.driver.find_element_by_xpath('//input[@value="Login"]').click()
 
         # We should end up on login page as user was invalid
-        # This is currently broken with Sauce labs, see:
-        # http://support.saucelabs.com/entries/20629691
-        #self.driver.find_element_by_name('username')
+        self.driver.find_element_by_name('username')
+
+        # Do proper login with new user
+        User.objects.create_user(
+            'testuser',
+            'noreply@weblate.org',
+            'testpassword'
+        )
+        password_input = self.driver.find_element_by_id('id_password')
+        password_input.send_keys('testpassword')
+        self.driver.find_element_by_xpath('//input[@value="Login"]').click()
+
+        # Load profile
+        self.driver.find_element_by_id('profile-button').click()
+
+        # Finally logout
+        self.driver.find_element_by_id('logout-button').click()
+
+        # We should be back on login page
+        self.driver.find_element_by_id('id_username')
 
 
+# What other platforms we want to test
 EXTRA_PLATFORMS = {
     'Chrome': {
         'browserName': 'chrome',
         'platform': 'XP',
     },
-    'Opera': {
-        'browserName': 'opera',
-        'platform': 'WIN7',
-    },
-    'MSIE10': {
-        'browserName': 'internet explorer',
-        'version': '10',
-        'platform': 'WIN8',
-    },
-    'MSIE9': {
-        'browserName': 'internet explorer',
-        'version': '9',
-        'platform': 'VISTA',
-    },
+    # Following browsers do not work correctly store cookies with Sauce labs:
+    # http://support.saucelabs.com/entries/20629691
+    #'Opera': {
+    #    'browserName': 'opera',
+    #    'platform': 'WIN7',
+    #},
+    #'MSIE10': {
+    #    'browserName': 'internet explorer',
+    #    'version': '10',
+    #    'platform': 'WIN8',
+    #},
+    #'MSIE9': {
+    #    'browserName': 'internet explorer',
+    #    'version': '9',
+    #    'platform': 'VISTA',
+    #},
 }
 
 
-if DO_SELENIUM:
+def create_extra_classes():
+    '''
+    Create classes for testing with other browsers
+    '''
     classes = {}
     for platform in EXTRA_PLATFORMS:
-        d = dict(SeleniumTests.__dict__)
-        name = '%s_%s' % (
+        classdict = dict(SeleniumTests.__dict__)
+        name = '{}_{}'.format(
+            platform,
             SeleniumTests.__name__,
-            platform
         )
-        d.update({
+        classdict.update({
             'caps': EXTRA_PLATFORMS[platform],
         })
-        classes[name] = new.classobj(name, (SeleniumTests,), d)
+        classes[name] = new.classobj(name, (SeleniumTests,), classdict)
 
     globals().update(classes)
+
+create_extra_classes()

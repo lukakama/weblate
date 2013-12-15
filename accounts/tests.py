@@ -22,12 +22,15 @@
 Tests for user handling.
 """
 
+from unittest import TestCase as UnitTestCase
 from django.test import TestCase
 from django.core.urlresolvers import reverse
-from django.contrib.auth.models import User, Group
+from django.contrib.auth.models import AnonymousUser, User, Group
 from django.core import mail
 from django.conf import settings
 from django.core.management import call_command
+from django.http import HttpRequest, HttpResponseRedirect
+
 from accounts.models import (
     Profile,
     notify_merge_failure,
@@ -38,36 +41,32 @@ from accounts.models import (
     notify_new_contributor,
     notify_new_language,
 )
+from accounts.captcha import hash_question, unhash_question, MathCaptcha
+from accounts.middleware import RequireLoginMiddleware
 
 from trans.tests.views import ViewTestCase
 from trans.tests.util import get_test_file
 from trans.models.unitdata import Suggestion, Comment
 from lang.models import Language
+from weblate import appsettings
 
 REGISTRATION_DATA = {
     'username': 'username',
     'email': 'noreply@weblate.org',
-    'password1': 'password',
-    'password2': 'password',
     'first_name': 'First',
     'last_name': 'Last',
+    'captcha_id': '00',
+    'captcha': '9999'
 }
 
 
 class RegistrationTest(TestCase):
-    def test_register(self):
-        response = self.client.post(
-            reverse('registration_register'),
-            REGISTRATION_DATA
-        )
-        # Check we did succeed
-        self.assertRedirects(response, reverse('registration_complete'))
-
+    def assertRegistration(self):
         # Check registration mail
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(
             mail.outbox[0].subject,
-            'Your registration on Weblate'
+            '[Weblate] Your registration on Weblate'
         )
 
         # Get confirmation URL from mail
@@ -77,11 +76,49 @@ class RegistrationTest(TestCase):
                 break
 
         # Confirm account
-        response = self.client.get(line[18:])
+        response = self.client.get(line[18:], follow=True)
         self.assertRedirects(
             response,
-            reverse('registration_activation_complete')
+            reverse('password')
         )
+
+    def test_register_captcha(self):
+        response = self.client.post(
+            reverse('register'),
+            REGISTRATION_DATA
+        )
+        self.assertContains(
+            response,
+            'Please check your math and try again.'
+        )
+
+    def test_register(self):
+        # Disable captcha
+        appsettings.REGISTRATION_CAPTCHA = False
+
+        response = self.client.post(
+            reverse('register'),
+            REGISTRATION_DATA
+        )
+        # Check we did succeed
+        self.assertRedirects(response, reverse('email-sent'))
+
+        # Confirm account
+        self.assertRegistration()
+
+        # Set password
+        response = self.client.post(
+            reverse('password'),
+            {
+                'password1': 'password',
+                'password2': 'password',
+            }
+        )
+        self.assertRedirects(response, reverse('profile'))
+
+        # Check we can access home (was redirected to password change)
+        response = self.client.get(reverse('home'))
+        self.assertContains(response, 'Logged in as')
 
         user = User.objects.get(username='username')
         # Verify user is active
@@ -90,23 +127,42 @@ class RegistrationTest(TestCase):
         self.assertEqual(user.first_name, 'First')
         self.assertEqual(user.last_name, 'Last')
 
+        # Restore settings
+        appsettings.REGISTRATION_CAPTCHA = True
+
+    def test_reset(self):
+        '''
+        Test for password reset.
+        '''
+        User.objects.create_user('testuser', 'test@example.com', 'x')
+
+        response = self.client.post(
+            reverse('password_reset'),
+            {
+                'email': 'test@example.com'
+            }
+        )
+        self.assertRedirects(response, reverse('email-sent'))
+
+        self.assertRegistration()
+
     def test_wrong_username(self):
         data = REGISTRATION_DATA.copy()
         data['username'] = 'u'
         response = self.client.post(
-            reverse('registration_register'),
+            reverse('register'),
             data
         )
         self.assertContains(
             response,
-            'Username needs to have at least five characters.'
+            'Ensure this value has at least 5 characters (it has 1).'
         )
 
     def test_wrong_mail(self):
         data = REGISTRATION_DATA.copy()
         data['email'] = 'x'
         response = self.client.post(
-            reverse('registration_register'),
+            reverse('register'),
             data
         )
         self.assertContains(
@@ -123,7 +179,7 @@ class RegistrationTest(TestCase):
         data = REGISTRATION_DATA.copy()
         data['content'] = 'x'
         response = self.client.post(
-            reverse('registration_register'),
+            reverse('register'),
             data
         )
         self.assertContains(
@@ -169,6 +225,19 @@ class ViewTest(TestCase):
     '''
     Test for views.
     '''
+
+    def get_user(self):
+        user = User.objects.create_user(
+            username='testuser',
+            password='testpassword'
+        )
+        user.first_name = 'First'
+        user.last_name = 'Second'
+        user.email = 'noreply@weblate.org'
+        user.save()
+        Profile.objects.get_or_create(user=user)
+        return user
+
     def test_contact(self):
         '''
         Test for contact form.
@@ -198,6 +267,45 @@ class ViewTest(TestCase):
             '[Weblate] Message from dark side'
         )
 
+    def test_hosting(self):
+        '''
+        Test for contact form.
+        '''
+        # Hack to allow sending of mails
+        settings.ADMINS = (('Weblate test', 'noreply@weblate.org'), )
+
+        # Disabled hosting
+        appsettings.OFFER_HOSTING = False
+        response = self.client.get(reverse('hosting'))
+        self.assertRedirects(response, reverse('home'))
+
+        # Enabled
+        appsettings.OFFER_HOSTING = True
+        response = self.client.get(reverse('hosting'))
+        self.assertContains(response, 'class="contact-table"')
+
+        # Sending message
+        response = self.client.post(
+            reverse('hosting'),
+            {
+                'name': 'Test',
+                'email': 'noreply@weblate.org',
+                'project': 'HOST',
+                'url': 'http://example.net',
+                'repo': 'git://github.com/nijel/weblate.git',
+                'mask': 'po/*.po',
+                'message': 'Hi\n\nI want to use it!',
+            }
+        )
+        self.assertRedirects(response, reverse('home'))
+
+        # Verify message
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(
+            mail.outbox[0].subject,
+            '[Weblate] Hosting request for HOST'
+        )
+
     def test_contact_subject(self):
         # With set subject
         response = self.client.get(
@@ -207,15 +315,7 @@ class ViewTest(TestCase):
         self.assertContains(response, 'Weblate test message')
 
     def test_contact_user(self):
-        user = User.objects.create_user(
-            username='testuser',
-            password='testpassword',
-        )
-        user.first_name = 'First'
-        user.last_name = 'Second'
-        user.email = 'noreply@weblate.org'
-        user.save()
-        Profile.objects.get_or_create(user=user)
+        self.get_user()
         # Login
         self.client.login(username='testuser', password='testpassword')
         response = self.client.get(
@@ -229,11 +329,7 @@ class ViewTest(TestCase):
         Test user pages.
         '''
         # Setup user
-        user = User.objects.create_user(
-            username='testuser',
-            password='testpassword'
-        )
-        Profile.objects.get_or_create(user=user)
+        user = self.get_user()
 
         # Login as user
         self.client.login(username='testuser', password='testpassword')
@@ -243,6 +339,24 @@ class ViewTest(TestCase):
             reverse('user_page', kwargs={'user': user.username})
         )
         self.assertContains(response, 'src="/activity')
+
+    def test_login(self):
+        self.get_user()
+
+        # Login
+        response = self.client.post(
+            reverse('login'),
+            {'username': 'testuser', 'password': 'testpassword'}
+        )
+        self.assertRedirects(response, reverse('home'))
+
+        # Login redirect
+        response = self.client.get(reverse('login'))
+        self.assertRedirects(response, reverse('profile'))
+
+        # Logout
+        response = self.client.get(reverse('logout'))
+        self.assertRedirects(response, reverse('login'))
 
 
 class ProfileTest(ViewTestCase):
@@ -261,6 +375,7 @@ class ProfileTest(ViewTestCase):
                 'first_name': 'First',
                 'last_name': 'Last',
                 'email': 'noreply@weblate.org',
+                'username': 'testik',
             }
         )
         self.assertRedirects(response, reverse('profile'))
@@ -425,4 +540,100 @@ class NotificationTest(ViewTestCase):
         self.assertEqual(
             mail.outbox[1].subject,
             '[Weblate] New comment in Test/Test'
+        )
+
+
+class CaptchaTest(UnitTestCase):
+    def test_decode(self):
+        question = '1 + 1'
+        timestamp = 1000
+        hashed = hash_question(question, timestamp)
+        self.assertEquals(
+            (question, timestamp),
+            unhash_question(hashed)
+        )
+
+    def test_tamper(self):
+        hashed = hash_question('', 0) + '00'
+        self.assertRaises(
+            ValueError,
+            unhash_question,
+            hashed
+        )
+
+    def test_invalid(self):
+        self.assertRaises(
+            ValueError,
+            unhash_question,
+            ''
+        )
+
+    def test_object(self):
+        captcha = MathCaptcha('1 * 2')
+        self.assertFalse(
+            captcha.validate(1)
+        )
+        self.assertTrue(
+            captcha.validate(2)
+        )
+        restored = MathCaptcha.from_hash(captcha.hashed)
+        self.assertEquals(
+            captcha.question,
+            restored.question
+        )
+        self.assertRaises(
+            ValueError,
+            MathCaptcha.from_hash,
+            captcha.hashed[:40]
+        )
+
+    def test_generate(self):
+        '''
+        Test generating of captcha for every operator.
+        '''
+        captcha = MathCaptcha()
+        for operator in MathCaptcha.operators:
+            captcha.operators = (operator,)
+            self.assertIn(operator, captcha.generate_question())
+
+
+class MiddlewareTest(TestCase):
+    def view_method(self):
+        return 'VIEW'
+
+    def test_disabled(self):
+        middleware = RequireLoginMiddleware()
+        request = HttpRequest()
+        self.assertIsNone(
+            middleware.process_view(request, self.view_method, (), {})
+        )
+
+    def test_protect_project(self):
+        settings.LOGIN_REQUIRED_URLS = (
+            r'/project/(.*)$',
+        )
+        middleware = RequireLoginMiddleware()
+        request = HttpRequest()
+        request.user = User()
+        request.META['SERVER_NAME'] = 'server'
+        request.META['SERVER_PORT'] = '80'
+        # No protection for not protected path
+        self.assertIsNone(
+            middleware.process_view(request, self.view_method, (), {})
+        )
+        request.path = '/project/foo/'
+        # No protection for protected path and logged in user
+        self.assertIsNone(
+            middleware.process_view(request, self.view_method, (), {})
+        )
+        # Protection for protected path and not logged in user
+        request.user = AnonymousUser()
+        self.assertIsInstance(
+            middleware.process_view(request, self.view_method, (), {}),
+            HttpResponseRedirect
+        )
+        # No protection for login and not logged in user
+        request.path = '/accounts/login/'
+        self.assertIsNone(
+            middleware.process_view(request, self.view_method, (), {})
         )

@@ -21,7 +21,7 @@
 from django.shortcuts import render_to_response, get_object_or_404
 from django.template import RequestContext
 from django.http import HttpResponse, HttpResponseBadRequest
-from django.contrib.auth.decorators import permission_required, login_required
+from django.contrib.auth.decorators import permission_required
 from django.db.models import Q
 from django.core.urlresolvers import reverse
 
@@ -47,7 +47,7 @@ def get_string(request, checksum):
     return HttpResponse(units[0].get_source_plurals()[0])
 
 
-@login_required
+@permission_required('trans.use_mt')
 def translate(request, unit_id):
     '''
     AJAX handler for translating.
@@ -229,4 +229,25 @@ def js_config(request):
             }
         ),
         mimetype='application/javascript'
+    )
+
+
+def get_detail(request, project, subproject, checksum):
+    '''
+    Returns source translation detail in all languages.
+    '''
+    subproject = get_subproject(request, project, subproject)
+    units = Unit.objects.filter(
+        checksum=checksum,
+        translation__subproject=subproject
+    )
+
+    return render_to_response(
+        'js/detail.html',
+        RequestContext(
+            request,
+            {
+                'units': units,
+            }
+        )
     )

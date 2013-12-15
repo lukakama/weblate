@@ -19,12 +19,13 @@
 #
 
 from django.utils.translation import ugettext as _, ungettext
-from django.http import HttpResponse, HttpResponseRedirect
+from django.shortcuts import redirect
+from django.http import HttpResponse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.http import Http404
 
-from trans.forms import UploadForm, SimpleUploadForm, ExtraUploadForm
+from trans.forms import get_upload_form
 from trans.views.helper import get_translation
 
 
@@ -79,22 +80,18 @@ def upload_translation(request, project, subproject, lang):
     # Check method and lock
     if obj.is_locked(request) or request.method != 'POST':
         messages.error(request, _('Access denied.'))
-        return HttpResponseRedirect(obj.get_absolute_url())
+        return redirect(obj)
 
     # Get correct form handler based on permissions
-    if request.user.has_perm('trans.author_translation'):
-        form = ExtraUploadForm(request.POST, request.FILES)
-    elif request.user.has_perm('trans.overwrite_translation'):
-        form = UploadForm(request.POST, request.FILES)
-    else:
-        form = SimpleUploadForm(request.POST, request.FILES)
+    form = get_upload_form(request)(request.POST, request.FILES)
 
     # Check form validity
     if not form.is_valid():
         messages.error(request, _('Please fix errors in the form.'))
-        return HttpResponseRedirect(obj.get_absolute_url())
+        return redirect(obj)
 
     # Create author name
+    author = None
     if (request.user.has_perm('trans.author_translation')
             and form.cleaned_data['author_name'] != ''
             and form.cleaned_data['author_email'] != ''):
@@ -102,14 +99,11 @@ def upload_translation(request, project, subproject, lang):
             form.cleaned_data['author_name'],
             form.cleaned_data['author_email']
         )
-    else:
-        author = None
 
     # Check for overwriting
+    overwrite = False
     if request.user.has_perm('trans.overwrite_translation'):
         overwrite = form.cleaned_data['overwrite']
-    else:
-        overwrite = False
 
     # Do actual import
     try:
@@ -149,4 +143,4 @@ def upload_translation(request, project, subproject, lang):
             _('File content merge failed: %s' % unicode(e))
         )
 
-    return HttpResponseRedirect(obj.get_absolute_url())
+    return redirect(obj)

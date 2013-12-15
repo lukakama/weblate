@@ -30,6 +30,7 @@ from translate.storage import mo
 from translate.storage import factory
 from trans.util import get_string
 from translate.misc import quote
+import weblate
 import subprocess
 import os.path
 import re
@@ -258,6 +259,12 @@ class FileUnit(object):
             return False
         return self.unit.isfuzzy()
 
+    def is_obsolete(self):
+        '''
+        Checks whether unit is marked as obsolete in backend.
+        '''
+        return self.mainunit.isobsolete()
+
     def is_translatable(self):
         '''
         Checks whether unit is translatable.
@@ -423,6 +430,16 @@ class FileFormat(object):
         '''
         if not hasattr(self.store, 'updateheader'):
             return
+
+        kwargs['x_generator'] = 'Weblate %s' % weblate.VERSION
+
+        # Adjust Content-Type header if needed
+        header = self.store.parseheader()
+        if (not 'Content-Type' in header
+                or 'charset=CHARSET' in header['Content-Type']
+                or 'charset=ASCII' in header['Content-Type']):
+            kwargs['Content_Type'] = 'text/plain; charset=UTF-8'
+
         self.store.updateheader(**kwargs)
 
     def save(self):
@@ -507,8 +524,8 @@ class FileFormat(object):
 
         return True
 
-    @staticmethod
-    def supports_new_language():
+    @classmethod
+    def supports_new_language(cls):
         '''
         Whether it supports creating new translation.
         '''
@@ -548,6 +565,7 @@ class PoFormat(FileFormat):
     format_id = 'po'
     loader = ('po', 'pofile')
     monolingual = False
+    msginit_found = None
 
     def get_language_pack(self):
         '''
@@ -581,16 +599,22 @@ class PoFormat(FileFormat):
             'application/x-gettext-catalog'
         )
 
-    @staticmethod
-    def supports_new_language():
+    @classmethod
+    def supports_new_language(cls):
         '''
         Checks whether we can create new language file.
         '''
-        try:
-            ret = subprocess.check_call(['msginit', '--help'])
-            return ret == 0
-        except:
-            return False
+        if cls.msginit_found is None:
+            try:
+                ret = subprocess.check_call(
+                    ['msginit', '--help'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
+                cls.msginit_found = (ret == 0)
+            except:
+                cls.msginit_found = False
+        return cls.msginit_found
 
     @staticmethod
     def is_valid_base_for_new(base):
@@ -608,13 +632,17 @@ class PoFormat(FileFormat):
         '''
         Adds new language file.
         '''
-        subprocess.check_call([
-            'msginit',
-            '-i', base,
-            '-o', filename,
-            '--no-translator',
-            '-l', code
-        ])
+        subprocess.check_call(
+            [
+                'msginit',
+                '-i', base,
+                '-o', filename,
+                '--no-translator',
+                '-l', code
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
 
 register_fileformat(PoFormat)
 
@@ -695,8 +723,8 @@ class AndroidFormat(FileFormat):
     # Whitespace is ignored in this format
     check_flags = ('ignore-begin-space', 'ignore-end-space')
 
-    @staticmethod
-    def supports_new_language():
+    @classmethod
+    def supports_new_language(cls):
         '''
         Checks whether we can create new language file.
         '''

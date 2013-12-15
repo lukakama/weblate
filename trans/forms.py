@@ -26,6 +26,9 @@ from django.utils.safestring import mark_safe
 from django.utils.encoding import smart_unicode
 from django.forms import ValidationError
 from lang.models import Language
+from trans.models import Unit
+from urllib import urlencode
+import weblate
 
 
 def escape_newline(value):
@@ -140,16 +143,62 @@ class PluralField(forms.CharField):
         return value
 
 
-class TranslationForm(forms.Form):
+class ChecksumForm(forms.Form):
+    '''
+    Form for handling checksum ids for translation.
+    '''
+    checksum = forms.CharField(widget=forms.HiddenInput)
+
+    def __init__(self, translation, *args, **kwargs):
+        self.translation = translation
+        super(ChecksumForm, self).__init__(*args, **kwargs)
+
+    def clean_checksum(self):
+        '''
+        Validates whether checksum is valid and fetches unit for it.
+        '''
+        if 'checksum' not in self.cleaned_data:
+            return
+
+        unit_set = self.translation.unit_set
+
+        try:
+            self.cleaned_data['unit'] = unit_set.filter(
+                checksum=self.cleaned_data['checksum'],
+            )[0]
+        except (Unit.DoesNotExist, IndexError):
+            weblate.logger.error(
+                'message %s disappeared!',
+                self.cleaned_data['checksum']
+            )
+            raise ValidationError(
+                _('Message you wanted to translate is no longer available!')
+            )
+
+
+class TranslationForm(ChecksumForm):
     '''
     Form used for translation of single string.
     '''
-    checksum = forms.CharField(widget=forms.HiddenInput)
     target = PluralField(required=False)
     fuzzy = forms.BooleanField(
         label=pgettext_lazy('Checkbox for marking translation fuzzy', 'Fuzzy'),
         required=False
     )
+
+    def __init__(self, translation, unit,
+                 *args, **kwargs):
+        if unit is not None:
+            kwargs['initial'] = {
+                'checksum': unit.checksum,
+                'target': (
+                    unit.translation.language, unit.get_target_plurals()
+                ),
+                'fuzzy': unit.fuzzy,
+            }
+        super(TranslationForm, self).__init__(
+            translation, *args, **kwargs
+        )
 
 
 class AntispamForm(forms.Form):
@@ -215,6 +264,18 @@ class ExtraUploadForm(UploadForm):
     )
 
 
+def get_upload_form(request):
+    '''
+    Returns correct upload form based on user permissions.
+    '''
+    if request.user.has_perm('trans.author_translation'):
+        return ExtraUploadForm
+    elif request.user.has_perm('trans.overwrite_translation'):
+        return UploadForm
+    else:
+        return SimpleUploadForm
+
+
 class SearchForm(forms.Form):
     '''
     Text searching form.
@@ -269,17 +330,35 @@ class SearchForm(forms.Form):
 
         return cleaned_data
 
+    def urlencode(self):
+        '''
+        Encodes query string to be used in URL.
+        '''
+        query = {
+            'q': self.cleaned_data['q'].encode('utf-8'),
+            'search': self.cleaned_data['search'],
+        }
+        if self.cleaned_data['src']:
+            query['src'] = 'on'
+        if self.cleaned_data['tgt']:
+            query['tgt'] = 'on'
+        if self.cleaned_data['ctx']:
+            query['ctx'] = 'on'
 
-class MergeForm(forms.Form):
+        return urlencode(query)
+
+
+class MergeForm(ChecksumForm):
     '''
     Simple form for merging translation of two units.
     '''
-    checksum = forms.CharField()
     merge = forms.IntegerField()
 
 
-class RevertForm(forms.Form):
-    checksum = forms.CharField()
+class RevertForm(ChecksumForm):
+    '''
+    Form for reverting edits.
+    '''
     revert = forms.IntegerField()
 
 

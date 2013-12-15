@@ -40,7 +40,9 @@ from trans.formats import AutoFormat
 from trans.checks import CHECKS
 from trans.models.subproject import SubProject
 from trans.models.project import Project
-from trans.util import get_user_display, get_site_url, sleep_while_git_locked
+from trans.util import (
+    get_user_display, get_site_url, sleep_while_git_locked, translation_percent
+)
 from trans.mixins import URLMixin, PercentMixin
 from trans.boolean_sum import BooleanSum
 
@@ -113,7 +115,7 @@ class TranslationManager(models.Manager):
             translations['failing_checks__sum'],
         ]
         # Calculate percent
-        return tuple([round(value * 100.0 / total, 1) for value in result])
+        return tuple([translation_percent(value, total) for value in result])
 
 
 class Translation(models.Model, URLMixin, PercentMixin):
@@ -153,6 +155,7 @@ class Translation(models.Model, URLMixin, PercentMixin):
             ('reset_translation', "Can reset translations to match remote"),
             ('automatic_translation', "Can do automatic translation"),
             ('lock_translation', "Can lock whole translation project"),
+            ('use_mt', "Can use machine translation"),
         )
         app_label = 'trans'
 
@@ -213,15 +216,15 @@ class Translation(models.Model, URLMixin, PercentMixin):
             return (0, 0, 0)
 
         return (
-            round(self.translated * 100.0 / self.total, 1),
-            round(self.fuzzy * 100.0 / self.total, 1),
-            round(self.failing_checks * 100.0 / self.total, 1),
+            translation_percent(self.translated, self.total),
+            translation_percent(self.fuzzy, self.total),
+            translation_percent(self.failing_checks, self.total),
         )
 
     def get_words_percent(self):
         if self.total_words == 0:
             return 0
-        return round(self.translated_words * 100.0 / self.total_words, 1)
+        return translation_percent(self.translated_words, self.total_words)
 
     @property
     def untranslated_words(self):
@@ -346,6 +349,21 @@ class Translation(models.Model, URLMixin, PercentMixin):
             'subproject': self.subproject.slug,
             'lang': self.language.code
         }
+
+    def get_widgets_url(self):
+        '''
+        Returns absolute URL for widgets.
+        '''
+        return get_site_url(
+            '%s?lang=%s' % (
+                reverse(
+                    'widgets', kwargs={
+                        'project': self.subproject.project.slug,
+                    }
+                ),
+                self.language.code,
+            )
+        )
 
     def get_share_url(self):
         '''
@@ -535,6 +553,11 @@ class Translation(models.Model, URLMixin, PercentMixin):
 
             # Store current unit ID
             created_units.add(newunit.id)
+
+        # Following query can get huge, so we should find better way
+        # to delete stale units, probably sort of garbage collection
+
+        # We should also do cleanup on source stings tracking objects
 
         # Get lists of stale units to delete
         units_to_delete = self.unit_set.exclude(
@@ -912,7 +935,7 @@ class Translation(models.Model, URLMixin, PercentMixin):
             pounit, add = self.store.find_unit(unit.context, src)
 
             # Bail out if we have not found anything
-            if pounit is None:
+            if pounit is None or pounit.is_obsolete():
                 return False, None
 
             # Check for changes
@@ -950,7 +973,6 @@ class Translation(models.Model, URLMixin, PercentMixin):
                 'plural_forms': self.language.get_plural_form(),
                 'language': self.language_code,
                 'PO_Revision_Date': po_revision_date,
-                'x_generator': 'Weblate %s' % weblate.VERSION
             }
 
             # Optionally store language team with link to website
@@ -1126,6 +1148,7 @@ class Translation(models.Model, URLMixin, PercentMixin):
         Merges contect of translate-toolkit store as a suggestions.
         '''
         from trans.models.unitdata import Suggestion
+        from trans.models.unit import Unit
         ret = False
         for unit in store.all_units():
 
@@ -1137,10 +1160,10 @@ class Translation(models.Model, URLMixin, PercentMixin):
             checksum = unit.get_checksum()
 
             # Grab database unit
-            dbunit = self.unit_set.filter(checksum=checksum)
-            if not dbunit.exists():
+            try:
+                dbunit = self.unit_set.filter(checksum=checksum)[0]
+            except Unit.DoesNotExist:
                 continue
-            dbunit = dbunit[0]
 
             # Indicate something new
             ret = True

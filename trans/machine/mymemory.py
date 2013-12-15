@@ -44,7 +44,7 @@ class MyMemoryTranslation(MachineTranslation):
         '''
         Reformats match to (translation, quality) tuple.
         '''
-        if match['quality'].isdigit():
+        if match['quality'] is not None and match['quality'].isdigit():
             quality = int(match['quality'])
         else:
             quality = 0
@@ -70,7 +70,7 @@ class MyMemoryTranslation(MachineTranslation):
         '''
         args = {
             'q': text.split('. ')[0][:500].encode('utf-8'),
-            'langpair': 'en|%s' % language,
+            'langpair': '%s|%s' % (appsettings.SOURCE_LANGUAGE, language),
         }
         if appsettings.MT_MYMEMORY_EMAIL is not None:
             args['de'] = appsettings.MT_MYMEMORY_EMAIL

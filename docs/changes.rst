@@ -1,10 +1,27 @@
 Changes
 =======
 
+weblate 1.8
+-----------
+
+Released on November 7th 2013.
+
+* Please check manual for upgrade instructions.
+* Nicer listing of project summary.
+* Better visible options for sharing.
+* More control over anonymous users privileges.
+* Supports login using third party services, check manual for more details.
+* Users can login by email instead of username.
+* Documentation improvements.
+* Improved source strings review.
+* Searching across all units.
+* Better tracking of source strings.
+* Captcha protection for registration.
+
 weblate 1.7
 -----------
 
-Released on ? 2013.
+Released on October 7th 2013.
 
 * Please check manual for upgrade instructions.
 * Support for checking Python brace format string.

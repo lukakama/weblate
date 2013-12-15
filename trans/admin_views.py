@@ -213,7 +213,11 @@ def ssh(request):
     '''
     # Check whether we can generate SSH key
     try:
-        ret = subprocess.check_call(['which', 'ssh-keygen'])
+        ret = subprocess.check_call(
+            ['which', 'ssh-keygen'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
         can_generate = (ret == 0 and not os.path.exists(RSA_KEY_FILE))
     except:
         can_generate = False
@@ -292,5 +296,5 @@ def ssh(request):
         'public_key': key,
         'can_generate': can_generate,
         'host_keys': get_host_keys(),
-        'ssh_docs': weblate.get_doc_url('admin', 'private'),
+        'ssh_docs': weblate.get_doc_url('admin/projects', 'private'),
     }))

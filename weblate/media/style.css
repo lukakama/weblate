@@ -91,6 +91,10 @@ nav li {
 .suggestions {
     width: 100%
 }
+.ignorecheck {
+    height: 1em;
+    width: 1em;
+}
 .navi-toolbar .ui-buttonset, .toolbar a, .small-button {
     font-size: 10px !important;
     vertical-align: bottom;
@@ -129,6 +133,8 @@ nav li {
     height: 1em;
     background: #ddd;
     border: 1px solid #aaa;
+    vertical-align: bottom;
+    display: inline-block;
 }
 .legend .progress {
     width: 1em;

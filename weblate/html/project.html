@@ -10,7 +10,13 @@
 
 <h2>{% trans "Project Information" %}</h2>
 
+<a class="menu-float" href="{{ object.get_widgets_url }}">
+<img src="{% url 'widget-image' project=object.slug widget='status' color='badge' %}" />
+</a>
+
+<table class="info">
 {% include "project_info.html" %}
+</table>
 
 <h2>{% trans "Subprojects" %}</h2>
 
@@ -60,9 +66,9 @@
 </div>
 
 <div id="share">
-{% url 'widgets' project=object.slug as widgets_url %}
-{% url 'data_project' project=object.slug as data_url %}
+{% with object as project %}
 {% include 'share.html' %}
+{% endwith %}
 </div>
 
 </div>

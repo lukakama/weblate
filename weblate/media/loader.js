@@ -376,12 +376,35 @@ $(function () {
     $('#s_content').hide();
     $('#id_content').parent('td').parent('tr').hide();
     $('.expander').click(function () {
-        $(this).parent().find('.expander-icon').toggleClass('ui-icon-triangle-1-s').toggleClass('ui-icon-triangle-1-e');
-        $(this).parent().next().toggle();
+        var $table_row = $(this).parent();
+        var $next_row = $table_row.next();
+        $table_row.find('.expander-icon').toggleClass('ui-icon-triangle-1-s').toggleClass('ui-icon-triangle-1-e');
+        $next_row.toggle();
+        var $loader = $next_row.find('tr.details .load-details');
+        if ($loader.length > 0) {
+            var url = $loader.attr('href');
+            $loader.remove();
+            $.get(
+                url,
+                function (data) {
+                    var $cell = $next_row.find('tr.details td');
+                    $cell.find('img').remove();
+                    $cell.append(data);
+                    $cell.find('.button').button();
+                }
+            );
+        }
     });
     $('.code-example').focus(function () {
         $(this).select();
     });
+    $('a.disconnect').click(function (e) {
+        e.preventDefault();
+        $('form#disconnect-form')
+            .attr('action', $(this).attr('href'))
+            .submit();
+    });
+
     $(document).tooltip({
         content: function () {
             var element = $(this);

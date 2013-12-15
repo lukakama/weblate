@@ -19,7 +19,7 @@
 #
 
 from django.contrib import admin
-from accounts.models import Profile
+from accounts.models import Profile, VerifiedEmail
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
 
@@ -36,12 +36,20 @@ class ProfileAdmin(admin.ModelAdmin):
 admin.site.register(Profile, ProfileAdmin)
 
 
+class VerifiedEmailAdmin(admin.ModelAdmin):
+    list_display = ('social', 'email')
+    search_fields = ('email', )
+    raw_id_fields = ('social',)
+
+admin.site.register(VerifiedEmail, VerifiedEmailAdmin)
+
+
 class WeblateUserAdmin(UserAdmin):
     '''
     Custom UserAdmin to add listing of group membership and whether user is
     active.
     '''
-    list_display = UserAdmin.list_display + ('is_active', 'user_groups')
+    list_display = UserAdmin.list_display + ('is_active', 'user_groups', 'id')
     list_filter = UserAdmin.list_filter + ('groups',)
 
     def user_groups(self, obj):

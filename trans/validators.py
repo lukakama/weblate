@@ -19,9 +19,14 @@
 #
 from django.core.exceptions import ValidationError
 from django.utils.translation import ugettext as _
+from trans.checks import CHECKS
 
 VALID_FLAGS = (
     'rst-text',
+    'python-format',
+    'c-format',
+    'php-format',
+    'python-brace-format',
 )
 
 
@@ -85,8 +90,13 @@ def validate_repo(val):
         repo = SubProject.objects.get_linked(val)
         if repo is not None and repo.is_repo_link():
             raise ValidationError(_('Can not link to linked repository!'))
-    except SubProject.DoesNotExist:
-        raise ValidationError(_('Invalid link to repository!'))
+    except (SubProject.DoesNotExist, ValueError):
+        raise ValidationError(
+            _(
+                'Invalid link to Weblate project, '
+                'use weblate://project/subproject.'
+            )
+        )
 
 
 def validate_autoaccept(val):
@@ -105,5 +115,8 @@ def validate_check_flags(val):
     Validates check influencing flags.
     '''
     for flag in val.split(','):
-        if flag not in VALID_FLAGS:
-            raise ValidationError(_('Invalid check flag: "%s"') % flag)
+        if flag in VALID_FLAGS:
+            continue
+        if flag.startswith('ignore-') and flag[7:] in CHECKS:
+            continue
+        raise ValidationError(_('Invalid check flag: "%s"') % flag)

@@ -108,6 +108,7 @@ class RepoTestCase(TestCase):
             template=template,
             file_format=file_format,
             repoweb=REPOWEB_URL,
+            save_history=True,
             new_base=new_base,
         )
 
@@ -403,11 +404,66 @@ class SubProjectTest(RepoTestCase):
         project = self.create_link()
         self.verify_subproject(project, 3, 'cs', 4)
 
+    def test_extra_file(self):
+        '''
+        Extra commit file validation.
+        '''
+        project = self.create_subproject()
+        project.full_clean()
+
+        project.extra_commit_file = 'locale/list.txt'
+        project.full_clean()
+
+        project.extra_commit_file = 'locale/%(language)s.txt'
+        project.full_clean()
+
+        project.extra_commit_file = 'locale/%(bar)s.txt'
+        self.assertRaisesMessage(
+            ValidationError,
+            "Bad format string ('bar')",
+            project.full_clean
+        )
+
+    def test_check_flags(self):
+        '''
+        Check flags validation.
+        '''
+        project = self.create_subproject()
+        project.full_clean()
+
+        project.check_flags = 'ignore-inconsistent'
+        project.full_clean()
+
+        project.check_flags = 'rst-text,ignore-inconsistent'
+        project.full_clean()
+
+        project.check_flags = 'nonsense'
+        self.assertRaisesMessage(
+            ValidationError,
+            'Invalid check flag: "nonsense"',
+            project.full_clean
+        )
+
+        project.check_flags = 'rst-text,ignore-nonsense'
+        self.assertRaisesMessage(
+            ValidationError,
+            'Invalid check flag: "ignore-nonsense"',
+            project.full_clean
+        )
+
     def test_validation(self):
         project = self.create_subproject()
         # Correct project
         project.full_clean()
+
         # Invalid mask
+        project.filemask = 'foo/x.po'
+        self.assertRaisesMessage(
+            ValidationError,
+            'File mask does not contain * as a language placeholder!',
+            project.full_clean
+        )
+        # Not matching mask
         project.filemask = 'foo/*.po'
         self.assertRaisesMessage(
             ValidationError,
@@ -422,9 +478,33 @@ class SubProjectTest(RepoTestCase):
             project.full_clean
         )
 
-        # Translation validation
-        translation = project.translation_set.get(language_code='cs')
-        translation.full_clean()
+        # Repoweb
+        project.repoweb = 'http://%(foo)s/%(bar)s/%72'
+        self.assertRaisesMessage(
+            ValidationError,
+            "Bad format string ('foo')",
+            project.full_clean
+        )
+
+        # Bad link
+        project.repo = 'weblate://foo'
+        project.push = ''
+        self.assertRaisesMessage(
+            ValidationError,
+            'Invalid link to Weblate project, '
+            'use weblate://project/subproject.',
+            project.full_clean
+        )
+
+        # Bad link
+        project.repo = 'weblate://foo/bar'
+        project.push = ''
+        self.assertRaisesMessage(
+            ValidationError,
+            'Invalid link to Weblate project, '
+            'use weblate://project/subproject.',
+            project.full_clean
+        )
 
     def test_validation_mono(self):
         project = self.create_po_mono()
@@ -506,3 +586,11 @@ class TranslationTest(RepoTestCase):
             None, 'TEST <test@example.net>', timezone.now(),
             force_commit=True
         )
+
+    def test_validation(self):
+        '''
+        Translation validation
+        '''
+        project = self.create_subproject()
+        translation = project.translation_set.get(language_code='cs')
+        translation.full_clean()

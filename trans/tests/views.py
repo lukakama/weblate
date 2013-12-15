@@ -44,8 +44,9 @@ class ViewTestCase(RepoTestCase):
         self.factory = RequestFactory()
         # Create user
         self.user = User.objects.create_user(
-            username='testuser',
-            password='testpassword'
+            'testuser',
+            'noreply@weblate.org',
+            'testpassword'
         )
         # Create profile for him
         Profile.objects.create(user=self.user)
@@ -422,7 +423,7 @@ class EditTest(ViewTestCase):
             target_2
         )
         unit = self.get_unit()
-        changes = Change.objects.filter(unit=unit)
+        changes = Change.objects.content().filter(unit=unit)
         self.assertEqual(changes[1].target, target)
         self.assertEqual(changes[0].target, target_2)
         self.assertBackend(1)
@@ -881,7 +882,23 @@ class SearchViewTest(ViewTestCase):
             )
         return response
 
-    def test_search(self):
+    def test_all_search(self):
+        '''
+        Searching in all projects.
+        '''
+        response = self.client.get(
+            reverse('search'),
+            {'q': 'hello'}
+        )
+        self.assertContains(
+            response,
+            '<span class="hlmatch">Hello</span>, world'
+        )
+
+    def test_project_search(self):
+        '''
+        Searching within project.
+        '''
         # Default
         self.do_search(
             {'q': 'hello'},

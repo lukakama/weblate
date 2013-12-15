@@ -71,4 +71,60 @@
 </tbody>
 </table>
 
+{% if hooks_enabled %}
+<h3>{% trans "Notification hooks" %}</h3>
+
+<p>
+{% blocktrans %}With notification hooks, Weblate will automatically import changes done by your developers and will allow continuous translation. More information is available in <a href="{{ hooks_docs }}">the documentation</a>.{% endblocktrans %}
+</p>
+{% endif %}
+
+<table>
+<thead>
+<tr>
+<th>{% trans "Project" %}</th>
+<th>{% trans "URL" %}</th>
+<th>{% trans "Link" %}</th>
+</thead>
+<tbody>
+<tr>
+<th>{{ object }}</th>
+<td>{{ site_url }}{% url 'hook-project' project=object.slug %}</td>
+<td><a href="{{ site_url }}{% url 'hook-project' project=object.slug %}">{% trans "Hook" %}</a></td>
+</tr>
+{% for subproject in object.subproject_set.all %}
+<tr>
+<th>{{ subproject }}</th>
+<td>{{ site_url }}{% url 'hook-subproject' project=object.slug subproject=subproject.slug %}</td>
+<td><a href="{{ site_url }}{% url 'hook-subproject' project=object.slug subproject=subproject.slug %}">{% trans "Hook" %}</a></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+
+<p>{% blocktrans %}Weblate also supports direct notification from several code hosting sites:{% endblocktrans %}</p>
+
+<table>
+<thead>
+<tr>
+<th>{% trans "Hosting site" %}</th>
+<th>{% trans "URL" %}</th>
+<th>{% trans "Note" %}</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th><a href="https://github.com/">GitHub</a></th>
+<td>{{ site_url }}{% url 'hook-github' %}</td>
+<td>{% trans "Enable Weblate service hook in repository settings." %}</td>
+</tr>
+<tr>
+<th><a href="https://bitbucket.org/">Bitbucket</a></th>
+<td>{{ site_url }}{% url 'hook-bitbucket' %}</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+
+
 {% endblock %}

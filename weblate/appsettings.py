@@ -66,6 +66,9 @@ SITE_TITLE = get('SITE_TITLE', 'Weblate')
 # Whether to offer hosting
 OFFER_HOSTING = get('OFFER_HOSTING', False)
 
+# Demo server tweaks
+DEMO_SERVER = get('DEMO_SERVER', False)
+
 # Enable remote hooks
 ENABLE_HOOKS = get('ENABLE_HOOKS', True)
 
@@ -116,6 +119,7 @@ CHECK_LIST = get('CHECK_LIST', (
     'trans.checks.markup.XMLTagsCheck',
     'trans.checks.source.OptionalPluralCheck',
     'trans.checks.source.EllipsisCheck',
+    'trans.checks.source.MultipleFailingCheck',
 ))
 
 # List of automatic fixups
@@ -142,3 +146,15 @@ SCRIPT_CHOICES = [
 
 # Font for charts and widgets
 TTF_PATH = get('TTF_PATH', os.path.join(WEB_ROOT, 'ttf'))
+
+# Anonymous user name
+ANONYMOUS_USER_NAME = get('ANONYMOUS_USER_NAME', 'anonymous')
+
+# Enable registrations
+REGISTRATION_OPEN = get('REGISTRATION_OPEN', True)
+
+# Captcha for registrations
+REGISTRATION_CAPTCHA = get('REGISTRATION_CAPTCHA', True)
+
+# Source language
+SOURCE_LANGUAGE = get('SOURCE_LANGUAGE', 'en')

@@ -290,6 +290,14 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             'subproject': self.slug
         }
 
+    def get_widgets_url(self):
+        '''
+        Returns absolute URL for widgets.
+        '''
+        return get_site_url(
+            reverse('widgets', kwargs={'project': self.project.slug})
+        )
+
     def get_share_url(self):
         '''
         Returns absolute URL usable for sharing.
@@ -911,6 +919,11 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         # Skip validation if we don't have valid project
         if self.project_id is None:
             return
+
+        # Check if we should rename
+        if self.id:
+            old = SubProject.objects.get(pk=self.id)
+            self.check_rename(old)
 
         # Validate git repo
         try:

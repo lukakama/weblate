@@ -18,10 +18,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from django.shortcuts import render_to_response
+from django.shortcuts import render_to_response, redirect
 from django.utils.translation import ugettext as _
 from django.template import RequestContext, loader
-from django.http import HttpResponseNotFound, Http404, HttpResponseRedirect
+from django.http import HttpResponseNotFound, Http404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Sum, Count, Q
@@ -31,12 +31,12 @@ from django.utils.safestring import mark_safe
 
 from trans.models import (
     Project, SubProject, Translation, Check,
-    Dictionary, Change,
+    Dictionary, Change, Unit
 )
 from trans.requirements import get_versions, get_optional_versions
 from lang.models import Language
 from trans.forms import (
-    UploadForm, SimpleUploadForm, ExtraUploadForm, SearchForm,
+    get_upload_form, SearchForm,
     AutoForm, ReviewForm, NewLanguageForm,
 )
 from accounts.models import Profile, notify_new_language
@@ -55,6 +55,17 @@ def home(request):
     Home page of Weblate showing list of projects, stats
     and user links if logged in.
     '''
+
+    if 'show_set_password' in request.session:
+        messages.warning(
+            request,
+            _(
+                'You have activated your account, now you should set '
+                'the password to be able to login next time.'
+            )
+        )
+        return redirect('password')
+
     projects = Project.objects.all_acl(request.user)
     acl_projects = projects
     if projects.count() == 1:
@@ -97,7 +108,54 @@ def home(request):
         'last_changes_rss': reverse('rss'),
         'last_changes_url': '',
         'usertranslations': usertranslations,
+        'search_form': SearchForm(),
     }))
+
+
+def search(request):
+    '''
+    Performs sitewide search on units.
+    '''
+    search_form = SearchForm(request.GET)
+    context = {
+        'search_form': search_form,
+    }
+
+    if search_form.is_valid():
+        units = Unit.objects.search(
+            search_form.cleaned_data,
+        ).select_related(
+            'translation',
+        )
+
+        limit = request.GET.get('limit', 50)
+        page = request.GET.get('page', 1)
+
+        paginator = Paginator(units, limit)
+
+        try:
+            units = paginator.page(page)
+        except PageNotAnInteger:
+            # If page is not an integer, deliver first page.
+            units = paginator.page(1)
+        except EmptyPage:
+            # If page is out of range (e.g. 9999), deliver last page of
+            # results.
+            units = paginator.page(paginator.num_pages)
+
+        context['units'] = units
+        context['title'] = _('Search for %s') % (
+            search_form.cleaned_data['q']
+        )
+        context['query_string'] = search_form.urlencode()
+        context['search_query'] = search_form.cleaned_data['q']
+    else:
+        messages.error(request, _('Invalid search query!'))
+
+    return render_to_response(
+        'search.html',
+        RequestContext(request, context)
+    )
 
 
 def show_engage(request, project, lang=None):
@@ -182,6 +240,8 @@ def show_subproject(request, project, subproject):
 
     return render_to_response('subproject.html', RequestContext(request, {
         'object': obj,
+        'translations': obj.translation_set.enabled(),
+        'show_language': 1,
         'last_changes': last_changes,
         'last_changes_rss': reverse(
             'rss-subproject',
@@ -200,12 +260,12 @@ def review_source(request, project, subproject):
     '''
     obj = get_subproject(request, project, subproject)
 
-    if not obj.translation_set.exists():
-        raise Http404('No translation exists in this subproject.')
-
     # Grab first translation in subproject
     # (this assumes all have same source strings)
-    source = obj.translation_set.all()[0]
+    try:
+        source = obj.translation_set.all()[0]
+    except Translation.DoesNotExist:
+        raise Http404('No translation exists in this subproject.')
 
     # Grab search type and page number
     rqtype = request.GET.get('type', 'all')
@@ -231,6 +291,7 @@ def review_source(request, project, subproject):
         'object': obj,
         'source': source,
         'sources': sources,
+        'rqtype': rqtype,
         'title': _('Review source strings in %s') % obj.__unicode__(),
     }))
 
@@ -240,12 +301,13 @@ def show_source(request, project, subproject):
     Show source strings summary and checks.
     '''
     obj = get_subproject(request, project, subproject)
-    if not obj.translation_set.exists():
-        raise Http404('No translation exists in this subproject.')
 
     # Grab first translation in subproject
     # (this assumes all have same source strings)
-    source = obj.translation_set.all()[0]
+    try:
+        source = obj.translation_set.all()[0]
+    except Translation.DoesNotExist:
+        raise Http404('No translation exists in this subproject.')
 
     return render_to_response('source.html', RequestContext(request, {
         'object': obj,
@@ -263,13 +325,8 @@ def show_translation(request, project, subproject, lang):
     # Check locks
     obj.is_locked(request)
 
-    # How much is user allowed to configure upload?
-    if request.user.has_perm('trans.author_translation'):
-        form = ExtraUploadForm()
-    elif request.user.has_perm('trans.overwrite_translation'):
-        form = UploadForm()
-    else:
-        form = SimpleUploadForm()
+    # Get form
+    form = get_upload_form(request)()
 
     # Is user allowed to do automatic translation?
     if request.user.has_perm('trans.automatic_translation'):
@@ -354,6 +411,7 @@ def about(request):
 
 def data_root(request):
     return render_to_response('data-root.html', RequestContext(request, {
+        'hooks_docs': weblate.get_doc_url('api', 'hooks'),
         'api_docs': weblate.get_doc_url('api', 'exports'),
         'rss_docs': weblate.get_doc_url('api', 'rss'),
         'projects': Project.objects.all_acl(request.user),
@@ -364,6 +422,7 @@ def data_project(request, project):
     obj = get_project(request, project)
     return render_to_response('data.html', RequestContext(request, {
         'object': obj,
+        'hooks_docs': weblate.get_doc_url('api', 'hooks'),
         'api_docs': weblate.get_doc_url('api', 'exports'),
         'rss_docs': weblate.get_doc_url('api', 'rss'),
     }))
@@ -400,7 +459,8 @@ def new_language(request, project, subproject):
             _('Failed to process new translation request!')
         )
 
-    return HttpResponseRedirect(reverse(
+    return redirect(
         'subproject',
-        kwargs={'subproject': obj.slug, 'project': obj.project.slug}
-    ))
+        subproject=obj.slug,
+        project=obj.project.slug
+    )

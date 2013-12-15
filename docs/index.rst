@@ -12,15 +12,12 @@ Contents:
     :maxdepth: 2
 
     about
-    usage
+    user/index
+    devel/index
+    admin/index
     faq
     formats
     api
-    quick
-    install
-    admin
-    config
-    management
     changes
     contributing
     license

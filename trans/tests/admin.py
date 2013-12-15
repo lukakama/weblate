@@ -23,6 +23,9 @@ import trans.admin_views
 from django.test import TestCase
 from django.core.urlresolvers import reverse
 from trans.tests.util import get_test_file
+import tempfile
+import shutil
+import os
 
 TEST_HOSTS = get_test_file('known_hosts')
 
@@ -45,6 +48,50 @@ class AdminTest(ViewTestCase):
         response = self.client.get(reverse('admin-ssh'))
         self.assertContains(response, 'SSH keys')
 
+    def test_ssh_generate(self):
+        tempdir = tempfile.mkdtemp()
+        rsafile = os.path.join(tempdir, 'id_rsa.pub')
+        try:
+            backup = trans.admin_views.RSA_KEY_FILE
+            trans.admin_views.RSA_KEY_FILE = rsafile
+
+            response = self.client.get(reverse('admin-ssh'))
+            self.assertContains(response, 'Generate SSH key')
+
+            response = self.client.post(
+                reverse('admin-ssh'),
+                {'action': 'generate'}
+            )
+            self.assertContains(response, 'Created new SSH key')
+
+        finally:
+            trans.admin_views.RSA_KEY_FILE = backup
+            shutil.rmtree(tempdir)
+
+    def test_ssh_add(self):
+        tempdir = tempfile.mkdtemp()
+        hostsfile = os.path.join(tempdir, 'known_hosts')
+        try:
+            backup = trans.admin_views.KNOWN_HOSTS_FILE
+            trans.admin_views.KNOWN_HOSTS_FILE = hostsfile
+
+            # Verify there is button for adding
+            response = self.client.get(reverse('admin-ssh'))
+            self.assertContains(response, 'Add host key')
+
+            # Add the key
+            response = self.client.post(
+                reverse('admin-ssh'),
+                {'action': 'add-host', 'host': 'github.com'}
+            )
+            self.assertContains(response, 'Added host key for github.com')
+
+            # Check the file contains it
+            self.assertIn('github.com', file(hostsfile).read())
+        finally:
+            trans.admin_views.KNOWN_HOSTS_FILE = backup
+            shutil.rmtree(tempdir)
+
     def test_performace(self):
         response = self.client.get(reverse('admin-performance'))
         self.assertContains(response, 'Django caching')
@@ -63,9 +110,47 @@ class AdminTest(ViewTestCase):
             response, 'Importing a new translation can take some time'
         )
 
+    def test_subproject(self):
+        '''
+        Test for custom subproject actions.
+        '''
+        self.assertCustomAdmin(
+            reverse('admin:trans_subproject_changelist')
+        )
+
+    def test_project(self):
+        '''
+        Test for custom project actions.
+        '''
+        self.assertCustomAdmin(
+            reverse('admin:trans_project_changelist')
+        )
+
+    def assertCustomAdmin(self, url):
+        '''
+        Test for (sub)project custom admin.
+        '''
+        response = self.client.get(url)
+        self.assertContains(
+            response, 'Update from git'
+        )
+        for action in 'force_commit', 'update_checks', 'update_from_git':
+            response = self.client.post(
+                url,
+                {
+                    '_selected_action': '1',
+                    'action': action,
+                }
+            )
+            self.assertRedirects(response, url)
+
 
 class SSHKeysTest(TestCase):
     def test_parse(self):
-        trans.admin_views.KNOWN_HOSTS_FILE = TEST_HOSTS
-        hosts = trans.admin_views.get_host_keys()
-        self.assertEqual(len(hosts), 50)
+        try:
+            backup = trans.admin_views.KNOWN_HOSTS_FILE
+            trans.admin_views.KNOWN_HOSTS_FILE = TEST_HOSTS
+            hosts = trans.admin_views.get_host_keys()
+            self.assertEqual(len(hosts), 50)
+        finally:
+            trans.admin_views.KNOWN_HOSTS_FILE = backup

@@ -151,9 +151,29 @@ BITBUCKET_PAYLOAD_HG = '''
 '''
 
 
+BITBUCKET_PAYLOAD_HG_NO_COMMIT = '''
+{
+    "canon_url": "https://bitbucket.org",
+    "commits": [],
+    "repository": {
+        "absolute_url": "/marcus/project-x/",
+        "fork": false,
+        "is_private": true,
+        "name": "Project X",
+        "owner": "marcus",
+        "scm": "hg",
+        "slug": "project-x",
+        "website": ""
+    },
+    "user": "marcus"
+}
+'''
+
+
 class HooksViewTest(ViewTestCase):
     def test_view_hook_project(self):
         appsettings.BACKGROUND_HOOKS = False
+        appsettings.ENABLE_HOOKS = True
         response = self.client.get(
             reverse('hook-project', kwargs={
                 'project': self.subproject.project.slug
@@ -163,6 +183,7 @@ class HooksViewTest(ViewTestCase):
 
     def test_view_hook_subproject(self):
         appsettings.BACKGROUND_HOOKS = False
+        appsettings.ENABLE_HOOKS = True
         response = self.client.get(
             reverse('hook-subproject', kwargs={
                 'project': self.subproject.project.slug,
@@ -173,6 +194,7 @@ class HooksViewTest(ViewTestCase):
 
     def test_view_hook_github(self):
         appsettings.BACKGROUND_HOOKS = False
+        appsettings.ENABLE_HOOKS = True
         response = self.client.post(
             reverse('hook-github'),
             {'payload': GITHUB_PAYLOAD}
@@ -181,6 +203,7 @@ class HooksViewTest(ViewTestCase):
 
     def test_view_hook_bitbucket_git(self):
         appsettings.BACKGROUND_HOOKS = False
+        appsettings.ENABLE_HOOKS = True
         response = self.client.post(
             reverse('hook-bitbucket'),
             {'payload': BITBUCKET_PAYLOAD_GIT}
@@ -189,8 +212,69 @@ class HooksViewTest(ViewTestCase):
 
     def test_view_hook_bitbucket_hg(self):
         appsettings.BACKGROUND_HOOKS = False
+        appsettings.ENABLE_HOOKS = True
         response = self.client.post(
             reverse('hook-bitbucket'),
             {'payload': BITBUCKET_PAYLOAD_HG}
         )
         self.assertContains(response, 'update triggered')
+
+    def test_view_hook_bitbucket_hg_no_commit(self):
+        appsettings.BACKGROUND_HOOKS = False
+        appsettings.ENABLE_HOOKS = True
+        response = self.client.post(
+            reverse('hook-bitbucket'),
+            {'payload': BITBUCKET_PAYLOAD_HG_NO_COMMIT}
+        )
+        self.assertContains(response, 'update triggered')
+
+    def test_disabled(self):
+        '''
+        Test for hooks disabling.
+        '''
+        appsettings.ENABLE_HOOKS = False
+        response = self.client.get(
+            reverse('hook-project', kwargs={
+                'project': self.subproject.project.slug
+            })
+        )
+        self.assertEquals(response.status_code, 405)
+        response = self.client.get(
+            reverse('hook-subproject', kwargs={
+                'project': self.subproject.project.slug,
+                'subproject': self.subproject.slug,
+            })
+        )
+        self.assertEquals(response.status_code, 405)
+        response = self.client.post(
+            reverse('hook-github'),
+            {'payload': GITHUB_PAYLOAD}
+        )
+        self.assertEquals(response.status_code, 405)
+        response = self.client.post(
+            reverse('hook-bitbucket'),
+            {'payload': BITBUCKET_PAYLOAD_GIT}
+        )
+        self.assertEquals(response.status_code, 405)
+
+    def test_wrong_payload(self):
+        '''
+        Tests for invalid payloads.
+        '''
+        # missing
+        response = self.client.post(
+            reverse('hook-github'),
+        )
+        self.assertContains(response, 'missing payload', status_code=400)
+        # wrong
+        response = self.client.post(
+            reverse('hook-github'),
+            {'payload': 'XX'},
+        )
+        self.assertContains(response, 'could not parse', status_code=400)
+        # missing data
+        response = self.client.post(
+            reverse('hook-github'),
+            {'payload': '{}'},
+        )
+        self.assertContains(response, 'invalid data', status_code=400)

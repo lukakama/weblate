@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load url from future %}
+{% load i18n %}
+
+{% block content %}
+
+
+{% if registration_open %}
+<h2>{% trans "Registration" %}</h2>
+
+<p>
+{% trans "By registering you agree to use your name and email in Git commits and provide your contribution under license defined by each translated project." %}
+</p>
+
+{% if registration_email %}
+
+<h2>{% trans "Register using email" %}</h2>
+
+{% if form.errors %}
+<div class="ui-widget">
+    <div style="padding: 0pt 0.7em;" class="ui-state-error ui-corner-all"> 
+        <p><span style="float: left; margin-right: 0.3em;" class="ui-icon ui-icon-alert"></span>
+        {% trans "Please fix errors in registration form." %}
+        </p>
+    </div>
+</div>
+{% endif %}
+
+<form action="{% url 'register' %}" method="post" accept-charset="utf-8">
+{% csrf_token %}
+<table>
+{{ form.as_table }}
+</table>
+<p><input type="submit" value="{% trans 'Register' %}" class="button" /></p>
+</form>
+
+{% endif %}
+
+{% if registration_backends %}
+
+<h2>{% trans "Third party registration" %}</h2>
+
+{% for name in registration_backends %}
+  <a class="button" href="{% url 'social:begin' name %}?next={% url 'profile' %}">{{ name }}</a>
+{% endfor %}
+
+{% endif %}
+
+{% else %}
+
+<p>
+{% url 'contact' as contact_url %}
+{% blocktrans %}Sorry, but registrations on this site are disabled. You can <a href="{{ contact_url }}">contact us</a> for more details.{% endblocktrans %}
+</p>
+
+{% endif %}
+
+{% endblock %}

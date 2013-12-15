@@ -15,7 +15,13 @@
 
 <h2>{% trans "Project Information" %}</h2>
 
+<a class="menu-float" href="{{ object.get_widgets_url }}">
+<img src="{% url 'widget-image-lang' project=object.subproject.project.slug widget='status' color='badge' lang=object.language.code  %}" />
+</a>
+
+<table class="info">
 {% include "translation_info.html" %}
+</table>
 
 {% with object.get_translation_checks as checks%}
 {% if checks %}
@@ -132,9 +138,9 @@
 </div>
 
 <div id="share">
-{% url 'widgets' project=object.subproject.project.slug as widgets_url %}
-{% url 'data_project' project=object.subproject.project.slug as data_url %}
+{% with object.subproject.project as project %}
 {% include 'share.html' %}
+{% endwith %}
 </div>
 
 <div id="stats">

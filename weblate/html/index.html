@@ -6,7 +6,12 @@
 
 {% if not user.is_authenticated %}
 <p>
-{% blocktrans %}This site runs <a href="{{ weblate_url }}">Weblate</a> for translating the software projects listed below. You need to be logged in for translating, otherwise you can only make suggestions.{% endblocktrans %}
+{% if demo_server %}
+{% blocktrans %}This site runs <a href="{{ weblate_url }}">Weblate</a> demo server.{% endblocktrans %}
+{% else %}
+{% blocktrans %}This site runs <a href="{{ weblate_url }}">Weblate</a> for translating the software projects listed below.{% endblocktrans %}
+{% endif %}
+{% trans "You need to be logged in for translating, otherwise you can only make suggestions." %}
 </p>
 {% endif %}
 
@@ -51,7 +56,7 @@
 </table>
 
 {% if offer_hosting %}
-{% url 'contact' as contact_url %}
+{% url 'hosting' as contact_url %}
 <p>{% blocktrans %}We can host your project as well, if you are interested, please <a href="{{ contact_url }}?subject=Project hosting">contact us</a>.{% endblocktrans %}</p>
 {% endif %}
 </div>
@@ -63,6 +68,7 @@
 
 <ul>
 <li><a href="#changes">{% trans "History" %}</a></li>
+<li><a href="#search">{% trans "Search" %}</a></li>
 <li><a href="#translators">{% trans "Most active translators" %}</a></li>
 <li><a href="#suggesters">{% trans "Most active suggesters" %}</a></li>
 <li><a href="{% url 'view_activity' %}">{% trans "Activity" %}</a></li>
@@ -71,6 +77,13 @@
 
 <div id="changes">
 {% include "last-changes.html" %}
+</div>
+
+<div id="search">
+<form action="{% url 'search' %}" method="GET">
+{{ search_form.as_p }}
+<input type="submit" value="{% trans "Search" %}" class="button" />
+</form>
 </div>
 
 <div id="translators">

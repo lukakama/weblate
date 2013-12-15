@@ -28,6 +28,7 @@ from django.core.cache import cache
 import traceback
 from trans.checks import CHECKS
 from trans.models.translation import Translation
+from trans.models.source import Source
 from trans.search import update_index_unit, fulltext_search, more_like
 from trans.autofixes import fix_target
 
@@ -184,42 +185,46 @@ class UnitManager(models.Manager):
             return self.none()
         from trans.models.changes import Change
         sample = self.all()[0]
-        changes = Change.objects.filter(
+        changes = Change.objects.content().filter(
             translation=sample.translation,
             timestamp__gte=date
         ).exclude(user=user)
         return self.filter(id__in=changes.values_list('unit__id', flat=True))
 
-    def search(self, search_type, search_query,
-               search_source=True, search_context=True, search_target=True):
+    def search(self, params):
         '''
         High level wrapper for searching.
         '''
 
-        if search_type == 'exact':
-            query = Q()
-            if search_source:
-                query |= Q(source=search_query)
-            if search_target:
-                query |= Q(target=search_query)
-            if search_context:
-                query |= Q(context=search_query)
-            return self.filter(query)
-        elif search_type == 'substring':
-            query = Q()
-            if search_source:
-                query |= Q(source__icontains=search_query)
-            if search_target:
-                query |= Q(target__icontains=search_query)
-            if search_context:
-                query |= Q(context__icontains=search_query)
+        if params['search'] in ('exact', 'substring'):
+            queries = []
+
+            if params['search'] == 'exact':
+                modifier = ''
+            else:
+                modifier = '__icontains'
+
+            if params['src']:
+                queries.append('source')
+            if params['tgt']:
+                queries.append('target')
+            if params['ctx']:
+                queries.append('context')
+
+            query = reduce(
+                lambda q, value:
+                q | Q(**{'%s%s' % (value, modifier): params['q']}),
+                queries,
+                Q()
+            )
+
             return self.filter(query)
         else:
             return self.fulltext(
-                search_query,
-                search_source,
-                search_context,
-                search_target
+                params['q'],
+                params['src'],
+                params['ctx'],
+                params['tgt']
             )
 
     def fulltext(self, query, source=True, context=True, translation=True,
@@ -288,23 +293,6 @@ class UnitManager(models.Manager):
             translation__subproject__project=project,
             translation__language=unit.translation.language
         )
-
-    def get_checksum(self, request, translation, checksum):
-        '''
-        Returns unit based on checksum.
-        '''
-        try:
-            return Unit.objects.filter(
-                checksum=checksum,
-                translation=translation
-            )[0]
-        except Unit.DoesNotExist:
-            weblate.logger.error('message %s disappeared!', checksum)
-            messages.error(
-                request,
-                _('Message you wanted to translate is no longer available!')
-            )
-            raise
 
 
 class Unit(models.Model):
@@ -436,6 +424,22 @@ class Unit(models.Model):
             same_content=same_content,
             same_state=same_state
         )
+
+        # Ensure we track source string
+        dummy, created = Source.objects.get_or_create(
+            checksum=self.checksum,
+            subproject=self.translation.subproject
+        )
+
+        # Create change object for new source string
+        if created:
+            from trans.models.changes import Change
+
+            Change.objects.create(
+                translation=self.translation,
+                action=Change.ACTION_NEW_SOURCE,
+                unit=self,
+            )
 
     def is_plural(self):
         '''
@@ -603,12 +607,15 @@ class Unit(models.Model):
         '''
         from trans.models.changes import Change
 
+        # Action type to store
         if change_action is not None:
             action = change_action
         elif oldunit.translated:
             action = Change.ACTION_CHANGE
         else:
             action = Change.ACTION_NEW
+
+        # Should we store history of edits?
         if self.translation.subproject.save_history:
             history_target = self.target
         else:
@@ -819,12 +826,13 @@ class Unit(models.Model):
                     self.update_has_failing_check(True)
                 return ({}, False)
 
-            # If there is no consistency checking, we can return
-            if not 'inconsistent' in CHECKS:
-                return ({}, False)
+            # We run only checks which span across more units
+            checks_to_run = {}
 
-            # Limit checks to consistency check for fuzzy messages
-            checks_to_run = {'inconsistent': CHECKS['inconsistent']}
+            # Consistency check checks across more translations
+            if 'inconsistent' in CHECKS:
+                checks_to_run['inconsistent'] = CHECKS['inconsistent']
+
             cleanup_checks = False
 
         return (checks_to_run, cleanup_checks)
@@ -901,7 +909,7 @@ class Unit(models.Model):
         '''
         Updates flag counting failing checks.
         '''
-        has_failing_check = not self.fuzzy and len(self.active_checks()) > 0
+        has_failing_check = not self.fuzzy and self.active_checks().exists()
 
         # Change attribute if it has changed
         if has_failing_check != self.has_failing_check:
@@ -1031,3 +1039,15 @@ class Unit(models.Model):
         return mark_safe(
             '\n'.join([FLAG_TEMPLATE % flag for flag in flags])
         )
+
+    def get_source_string_info(self):
+        '''
+        Returns related source string object.
+        '''
+        try:
+            return Source.objects.get(
+                checksum=self.checksum,
+                subproject=self.translation.subproject
+            )
+        except Source.DoesNotExist:
+            return None

@@ -22,6 +22,18 @@
 # Extra languages not included in ttkit
 EXTRALANGS = (
     (
+        'li',
+        'Limburgish',
+        2,
+        '(n != 1)',
+    ),
+    (
+        'tl',
+        'Tagalog',
+        1,
+        '0',
+    ),
+    (
         'ur',
         'Urdu',
         2,

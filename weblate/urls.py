@@ -563,6 +563,11 @@ urlpatterns = patterns(
         name='js-dictionary',
     ),
     url(
+        r'^js/detail/' + SUBPROJECT + '(?P<checksum>[^/]+)/$',
+        'trans.views.js.get_detail',
+        name='js-detail',
+    ),
+    url(
         r'^js/git/' + PROJECT + '$',
         'trans.views.js.git_status_project',
         name='git_status_project',
@@ -602,6 +607,7 @@ urlpatterns = patterns(
 
     # Static pages
     url(r'^contact/', 'accounts.views.contact', name='contact'),
+    url(r'^hosting/', 'accounts.views.hosting', name='hosting'),
     url(r'^about/$', 'trans.views.basic.about', name='about'),
 
     # User pages
@@ -628,5 +634,11 @@ urlpatterns = patterns(
         r'^media/(?P<path>.*)$',
         'django.views.static.serve',
         {'document_root': settings.MEDIA_ROOT}
+    ),
+
+    url(
+        r'^search/$',
+        'trans.views.basic.search',
+        name="search"
     ),
 )

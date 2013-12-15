@@ -18,7 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from django.shortcuts import render_to_response, get_object_or_404
+from django.shortcuts import render_to_response, get_object_or_404, redirect
 from django.utils.translation import ugettext as _
 from django.template import RequestContext
 from django.http import HttpResponseRedirect, HttpResponse
@@ -108,7 +108,7 @@ def search(translation, request):
         # Check if we know the search
         if search_id not in request.session:
             messages.error(request, _('Invalid search string!'))
-            return HttpResponseRedirect(translation.get_absolute_url())
+            return redirect(translation)
 
         return request.session[search_id]
 
@@ -134,11 +134,7 @@ def search(translation, request):
     elif search_form.is_valid():
         # Apply search conditions
         allunits = translation.unit_set.search(
-            search_form.cleaned_data['search'],
-            search_form.cleaned_data['q'],
-            search_form.cleaned_data['src'],
-            search_form.cleaned_data['ctx'],
-            search_form.cleaned_data['tgt'],
+            search_form.cleaned_data,
         )
 
         search_query = search_form.cleaned_data['q']
@@ -168,7 +164,7 @@ def search(translation, request):
     # Check empty search results
     if len(unit_ids) == 0:
         messages.warning(request, _('No string matched your search!'))
-        return HttpResponseRedirect(translation.get_absolute_url())
+        return redirect(translation)
 
     # Checksum unit access
     offset = 0
@@ -178,7 +174,7 @@ def search(translation, request):
             offset = unit_ids.index(unit.id)
         except (Unit.DoesNotExist, IndexError):
             messages.warning(request, _('No string matched your search!'))
-            return HttpResponseRedirect(translation.get_absolute_url())
+            return redirect(translation)
 
     # Remove old search results
     cleanup_session(request.session)
@@ -208,6 +204,14 @@ def handle_translate_suggest(unit, form, request,
         messages.error(request, _('Your suggestion is empty!'))
         # Stay on same entry
         return HttpResponseRedirect(this_unit_url)
+    elif not request.user.has_perm('trans.add_suggestion'):
+        # Need privilege to add
+        messages.error(
+            request,
+            _('You don\'t have privileges to add suggestions!')
+        )
+        # Stay on same entry
+        return HttpResponseRedirect(this_unit_url)
     # Invite user to become translator if there is nobody else
     recent_changes = Change.objects.content(True).filter(
         translation=unit.translation,
@@ -229,41 +233,29 @@ def handle_translate_suggest(unit, form, request,
     return HttpResponseRedirect(next_unit_url)
 
 
-def handle_translate(obj, request, user_locked, this_unit_url, next_unit_url):
+def handle_translate(translation, request, user_locked,
+                     this_unit_url, next_unit_url):
     '''
     Saves translation or suggestion to database and backend.
     '''
     # Antispam protection
     antispam = AntispamForm(request.POST)
-    if not request.user.is_authenticated() and not antispam.is_valid():
+    if not antispam.is_valid():
         # Silently redirect to next entry
         return HttpResponseRedirect(next_unit_url)
 
-    form = TranslationForm(request.POST)
+    # Check whether translation is not outdated
+    translation.check_sync()
+
+    form = TranslationForm(translation, None, request.POST)
     if not form.is_valid():
         return
 
-    # Check whether translation is not outdated
-    obj.check_sync()
-
-    try:
-        unit = Unit.objects.get_checksum(
-            request,
-            obj,
-            form.cleaned_data['checksum'],
-        )
-    except (Unit.DoesNotExist, IndexError):
-        return
+    unit = form.cleaned_data['unit']
 
     if 'suggest' in request.POST:
         return handle_translate_suggest(
             unit, form, request, this_unit_url, next_unit_url
-        )
-    elif not request.user.is_authenticated():
-        # We accept translations only from authenticated
-        messages.error(
-            request,
-            _('You need to log in to be able to save translations!')
         )
     elif not request.user.has_perm('trans.save_translation'):
         # Need privilege to save
@@ -322,7 +314,7 @@ def handle_translate(obj, request, user_locked, this_unit_url, next_unit_url):
     return HttpResponseRedirect(next_unit_url)
 
 
-def handle_merge(obj, request, next_unit_url):
+def handle_merge(translation, request, next_unit_url):
     '''
     Handles unit merging.
     '''
@@ -334,18 +326,11 @@ def handle_merge(obj, request, next_unit_url):
         )
         return
 
-    mergeform = MergeForm(request.GET)
+    mergeform = MergeForm(translation, request.GET)
     if not mergeform.is_valid():
         return
 
-    try:
-        unit = Unit.objects.get_checksum(
-            request,
-            obj,
-            mergeform.cleaned_data['checksum'],
-        )
-    except Unit.DoesNotExist:
-        return
+    unit = mergeform.cleaned_data['unit']
 
     merged = Unit.objects.get(
         pk=mergeform.cleaned_data['merge']
@@ -370,7 +355,7 @@ def handle_merge(obj, request, next_unit_url):
         return HttpResponseRedirect(next_unit_url)
 
 
-def handle_revert(obj, request, next_unit_url):
+def handle_revert(translation, request, next_unit_url):
     if not request.user.has_perm('trans.save_translation'):
         # Need privilege to save
         messages.error(
@@ -379,18 +364,11 @@ def handle_revert(obj, request, next_unit_url):
         )
         return
 
-    revertform = RevertForm(request.GET)
+    revertform = RevertForm(translation, request.GET)
     if not revertform.is_valid():
         return
 
-    try:
-        unit = Unit.objects.get_checksum(
-            request,
-            obj,
-            revertform.cleaned_data['checksum'],
-        )
-    except Unit.DoesNotExist:
-        return
+    unit = revertform.cleaned_data['unit']
 
     change = Change.objects.get(
         pk=revertform.cleaned_data['revert']
@@ -414,18 +392,10 @@ def handle_revert(obj, request, next_unit_url):
         return HttpResponseRedirect(next_unit_url)
 
 
-def handle_suggestions(obj, request, this_unit_url):
+def handle_suggestions(translation, request, this_unit_url):
     '''
     Handles suggestion deleting/accepting.
     '''
-    # Check for authenticated users
-    if not request.user.is_authenticated():
-        messages.error(
-            request,
-            _('You need to log in to be able to manage suggestions!')
-        )
-        return HttpResponseRedirect(this_unit_url)
-
     sugid = ''
 
     # Parse suggestion ID
@@ -446,7 +416,7 @@ def handle_suggestions(obj, request, this_unit_url):
                     _('You do not have privilege to accept suggestions!')
                 )
                 return HttpResponseRedirect(this_unit_url)
-            suggestion.accept(obj, request)
+            suggestion.accept(translation, request)
         elif 'delete' in request.POST:
             # Delete suggestion
             if not request.user.has_perm('trans.delete_suggestion'):
@@ -463,7 +433,7 @@ def handle_suggestions(obj, request, this_unit_url):
                     _('You do not have privilege to vote for suggestions!')
                 )
                 return HttpResponseRedirect(this_unit_url)
-            suggestion.add_vote(obj, request, True)
+            suggestion.add_vote(translation, request, True)
         elif 'downvote' in request.POST:
             if not request.user.has_perm('trans.vote_suggestion'):
                 messages.error(
@@ -471,7 +441,7 @@ def handle_suggestions(obj, request, this_unit_url):
                     _('You do not have privilege to vote for suggestions!')
                 )
                 return HttpResponseRedirect(this_unit_url)
-            suggestion.add_vote(obj, request, False)
+            suggestion.add_vote(translation, request, False)
 
     except (Suggestion.DoesNotExist, ValueError):
         messages.error(request, _('Invalid suggestion!'))
@@ -484,14 +454,16 @@ def translate(request, project, subproject, lang):
     '''
     Generic entry point for translating, suggesting and searching.
     '''
-    obj = get_translation(request, project, subproject, lang)
+    translation = get_translation(request, project, subproject, lang)
 
     # Check locks
-    project_locked, user_locked, own_lock = obj.is_locked(request, True)
+    project_locked, user_locked, own_lock = translation.is_locked(
+        request, True
+    )
     locked = project_locked or user_locked
 
     # Search results
-    search_result = search(obj, request)
+    search_result = search(translation, request)
 
     # Handle redirects
     if isinstance(search_result, HttpResponse):
@@ -512,11 +484,11 @@ def translate(request, project, subproject, lang):
         # Delete search
         del request.session['search_%s' % search_result['search_id']]
         # Redirect to translation
-        return HttpResponseRedirect(obj.get_absolute_url())
+        return redirect(translation)
 
     # Some URLs we will most likely use
     base_unit_url = '%s?sid=%s&offset=' % (
-        obj.get_translate_url(),
+        translation.get_translate_url(),
         search_result['search_id'],
     )
     this_unit_url = base_unit_url + str(offset)
@@ -533,18 +505,25 @@ def translate(request, project, subproject, lang):
                 and 'upvote' not in request.POST
                 and 'downvote' not in request.POST):
             response = handle_translate(
-                obj, request, user_locked, this_unit_url, next_unit_url
+                translation, request, user_locked,
+                this_unit_url, next_unit_url
             )
         elif not locked:
-            response = handle_suggestions(obj, request, this_unit_url)
+            response = handle_suggestions(
+                translation, request, this_unit_url
+            )
 
     # Handle translation merging
     elif 'merge' in request.GET and not locked:
-        response = handle_merge(obj, request, next_unit_url)
+        response = handle_merge(
+            translation, request, next_unit_url
+        )
 
     # Handle reverting
     elif 'revert' in request.GET and not locked:
-        response = handle_revert(obj, request, this_unit_url)
+        response = handle_revert(
+            translation, request, this_unit_url
+        )
 
     # Pass possible redirect further
     if response is not None:
@@ -552,26 +531,23 @@ def translate(request, project, subproject, lang):
 
     # Grab actual unit
     try:
-        unit = obj.unit_set.get(pk=search_result['ids'][offset])
+        unit = translation.unit_set.get(pk=search_result['ids'][offset])
     except Unit.DoesNotExist:
         # Can happen when using SID for other translation
         messages.error(request, _('Invalid search string!'))
-        return HttpResponseRedirect(obj.get_absolute_url())
+        return redirect(translation)
 
     # Show secondary languages for logged in users
     if request.user.is_authenticated():
         secondary = request.user.get_profile().get_secondary_units(unit)
-        antispam = None
     else:
         secondary = None
-        antispam = AntispamForm()
+
+    # Spam protection
+    antispam = AntispamForm()
 
     # Prepare form
-    form = TranslationForm(initial={
-        'checksum': unit.checksum,
-        'target': (unit.translation.language, unit.get_target_plurals()),
-        'fuzzy': unit.fuzzy,
-    })
+    form = TranslationForm(translation, unit)
 
     return render_to_response(
         'translate.html',
@@ -583,9 +559,9 @@ def translate(request, project, subproject, lang):
                 'last_unit_url': base_unit_url + str(num_results - 1),
                 'next_unit_url': next_unit_url,
                 'prev_unit_url': base_unit_url + str(offset - 1),
-                'object': obj,
+                'object': translation,
                 'unit': unit,
-                'total': obj.unit_set.all().count(),
+                'total': translation.unit_set.all().count(),
                 'search_id': search_result['search_id'],
                 'search_query': search_result['query'],
                 'offset': offset,
@@ -609,31 +585,33 @@ def translate(request, project, subproject, lang):
 @login_required
 @permission_required('trans.automatic_translation')
 def auto_translation(request, project, subproject, lang):
-    obj = get_translation(request, project, subproject, lang)
-    obj.commit_pending(request)
-    autoform = AutoForm(obj, request.POST)
+    translation = get_translation(request, project, subproject, lang)
+    translation.commit_pending(request)
+    autoform = AutoForm(translation, request.POST)
     change = None
-    if not obj.subproject.locked and autoform.is_valid():
+    if not translation.subproject.locked and autoform.is_valid():
         if autoform.cleaned_data['inconsistent']:
-            units = obj.unit_set.filter_type('inconsistent', obj)
+            units = translation.unit_set.filter_type(
+                'inconsistent', translation
+            )
         elif autoform.cleaned_data['overwrite']:
-            units = obj.unit_set.all()
+            units = translation.unit_set.all()
         else:
-            units = obj.unit_set.filter(translated=False)
+            units = translation.unit_set.filter(translated=False)
 
         sources = Unit.objects.filter(
-            translation__language=obj.language,
+            translation__language=translation.language,
             translated=True
         )
         if autoform.cleaned_data['subproject'] == '':
             sources = sources.filter(
-                translation__subproject__project=obj.subproject.project
+                translation__subproject__project=translation.subproject.project
             ).exclude(
-                translation=obj
+                translation=translation
             )
         else:
             subprj = SubProject.objects.get(
-                project=obj.subproject.project,
+                project=translation.subproject.project,
                 slug=autoform.cleaned_data['subproject']
             )
             sources = sources.filter(translation__subproject=subprj)
@@ -664,7 +642,7 @@ def auto_translation(request, project, subproject, lang):
     else:
         messages.error(request, _('Failed to process form!'))
 
-    return HttpResponseRedirect(obj.get_absolute_url())
+    return redirect(translation)
 
 
 @login_required
@@ -672,18 +650,18 @@ def comment(request, pk):
     '''
     Adds new comment.
     '''
-    obj = get_object_or_404(Unit, pk=pk)
-    obj.check_acl(request)
+    translation = get_object_or_404(Unit, pk=pk)
+    translation.check_acl(request)
     if request.POST.get('type', '') == 'source':
         lang = None
     else:
-        lang = obj.translation.language
+        lang = translation.translation.language
 
     form = CommentForm(request.POST)
 
     if form.is_valid():
         Comment.objects.add(
-            obj,
+            translation,
             request.user,
             lang,
             form.cleaned_data['comment']
@@ -692,4 +670,4 @@ def comment(request, pk):
     else:
         messages.error(request, _('Failed to add comment!'))
 
-    return HttpResponseRedirect(obj.get_absolute_url())
+    return redirect(request.POST.get('next', translation))

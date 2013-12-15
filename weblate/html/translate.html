@@ -52,16 +52,16 @@
 </tr>
 {% endfor %}
 {% endif %}
-<tr>
-<th class="source labelscolumn">{% trans "Source" %}</th>
-<td class="translatetext">{{ unit.source|fmtsearchmatch:search_query }}</td>
-</tr>
 {% if unit.previous_source and unit.fuzzy %}
 <tr>
 <th class="labelscolumn">{% trans "Source change" %}</th>
 <td>{{ unit.previous_source|fmtsourcediff:unit }}</td>
 </tr>
 {% endif %}
+<tr>
+<th class="source labelscolumn">{% trans "Source" %}</th>
+<td class="translatetext">{{ unit.source|fmtsearchmatch:search_query }}</td>
+</tr>
 {% if unit.context %}
 <tr>
 <th class="labelscolumn">{% trans "Context" %}</th>
@@ -99,7 +99,7 @@
 <tr>
 <th class="labelscolumn">{% trans "Failing checks" %}</th>
 <td>
-{% include "list-checks.html" %}
+{% show_checks checks user %}
 </td>
 </tr>
 {% endif %}
@@ -154,13 +154,19 @@
 {% if perms.trans.save_translation %}
 <input class="button" type="submit" value="{% trans "Save" %}" name="save" tabindex="150" {% if locked %}disabled="disabled"{% endif %} />
 {% else %}
-{% url 'django.contrib.auth.views.login' as login_url %}
+{% url 'login' as login_url %}
 {% with unit.translation.get_translate_url as translate_url %}
 {% blocktrans %}<a href="{{ login_url }}?next={{ translate_url }}">Log in</a> for saving translations.{% endblocktrans %}
 {% endwith %}
 {% endif %}
 {% endif %}
+
+{% if perms.trans.add_suggestion %}
 <input class="button" type="submit" value="{% trans "Suggest" %}" name="suggest" tabindex="151" {% if project_locked %}disabled="disabled"{% endif %} />
+{% else %}
+{% trans "No privileges for adding suggestions!" %}
+{% endif %}
+
 {% if perms.trans.save_translation %}
 <div class="menu-float tooltip">
 <div class="tooltip-content">{% trans "Additional text to include in the commit message." %}</div>
@@ -180,7 +186,7 @@
         <li><a href="#tab-nearby" title="{% trans "Messages placed around this one" %}">{% trans "Nearby messages" %}</a></li>
         <li><a href="{% url 'js-other' unit_id=unit.id %}?type={{ type }}&amp;offset={{ offset }}&amp;sid={{ search_id }}" title="{% trans "Same message used in different subprojects" %}">{% trans "All locations" %}</a></li>
         <li><a href="{% url 'js-dictionary' unit_id=unit.id %}" title="{% trans "Words extracted from glossary" %}">{% trans "Glossary" %}</a></li>
-        {% if mt_enabled and user.is_authenticated %}
+        {% if mt_enabled and perms.trans.use_mt %}
         <li><a href="#tab-machine" title="{% trans "Machine translation suggestions" %}">{% trans "Machine translation" %}</a></li>
         {% endif %}
         <li><a href="#tab-comments" title="{% trans "Comments about this translation" %}">
@@ -217,7 +223,7 @@
     </tbody>
     </table>
     </div>
-    {% if mt_enabled and user.is_authenticated %}
+    {% if mt_enabled and perms.trans.use_mt %}
     <div id="tab-machine">
     <img src="{% get_media_prefix %}loading.gif" id="mt-loading" style="display: none" />
     <table>
@@ -246,6 +252,7 @@
     {% if perms.trans.add_comment %}
     <form method="post" action="{% url 'comment' pk=unit.id %}">
     {% csrf_token %}
+    <input type="hidden" name="next" value="{{ this_unit_url }}" />
     {{ comment_form.comment }}
     <br />
     <input class="button" type="submit" value="{% trans "Add" %}" />
@@ -262,7 +269,7 @@
     {% with unit.active_source_checks as checks %}
     {% if checks %}
     <h4>{% trans "Failing checks" %}</h4>
-    {% include "list-checks.html" %}
+    {% show_checks checks user %}
     {% endif %}
     {% endwith %}
 
@@ -279,6 +286,7 @@
     <form method="post" action="{% url 'comment' pk=unit.id %}">
     {% csrf_token %}
     <input type="hidden" name="type" value="source" />
+    <input type="hidden" name="next" value="{{ this_unit_url }}" />
     {{ comment_form.comment }}
     <br />
     <input class="button" type="submit" value="{% trans "Add" %}" />
