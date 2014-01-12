@@ -205,6 +205,23 @@ def get_host_keys():
     return result
 
 
+def get_key_data():
+    '''
+    Parses host key and returns it.
+    '''
+    # Read key data if it exists
+    if os.path.exists(RSA_KEY_FILE):
+        key_data = file(RSA_KEY_FILE).read()
+        key_type, key_fingerprint, key_id = key_data.strip().split(None, 2)
+        return {
+            'key': key_data,
+            'type': key_type,
+            'fingerprint': key_fingerprint,
+            'id': key_id,
+        }
+    return None
+
+
 @staff_member_required
 def ssh(request):
     '''
@@ -248,21 +265,12 @@ def ssh(request):
         except (subprocess.CalledProcessError, OSError) as exc:
             messages.error(
                 request,
-                _('Failed to generate key: %s') % exc.output
+                _('Failed to generate key: %s') %
+                getattr(exc, 'output', str(exc))
             )
 
     # Read key data if it exists
-    if os.path.exists(RSA_KEY_FILE):
-        key_data = file(RSA_KEY_FILE).read()
-        key_type, key_fingerprint, key_id = key_data.strip().split(None, 2)
-        key = {
-            'key': key_data,
-            'type': key_type,
-            'fingerprint': key_fingerprint,
-            'id': key_id,
-        }
-    else:
-        key = None
+    key = get_key_data()
 
     # Add host key
     if action == 'add-host':
@@ -291,7 +299,7 @@ def ssh(request):
                         request,
                         _(
                             'Added host key for %(host)s with fingerprint '
-                            '%(fingerprint)s (%(keytype)s, '
+                            '%(fingerprint)s (%(keytype)s), '
                             'please verify that it is correct.'
                         ) % {
                             'host': host,

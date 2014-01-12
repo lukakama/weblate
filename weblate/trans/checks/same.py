@@ -79,6 +79,8 @@ SAME_BLACKLIST = frozenset((
     'cache',
     'cardinality',
     'chat',
+    'click',
+    'club',
     'cm',
     'code',
     'collation',
@@ -346,6 +348,7 @@ SAME_BLACKLIST = frozenset((
     'parameters',
     'partition',
     'party',
+    'password',
     'pause',
     'paypal',
     'pdf',
@@ -414,6 +417,7 @@ SAME_BLACKLIST = frozenset((
     'saver',
     'scalable',
     'scenario',
+    'score',
     'screen',
     'screenshot',
     'screensaver',
@@ -922,4 +926,4 @@ class SameCheck(TargetCheck):
         if self.should_ignore(source, unit, cache_slot):
             return False
 
-        return (source == target)
+        return source == target

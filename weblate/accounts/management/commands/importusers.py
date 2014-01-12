@@ -18,6 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import print_function
 from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth.models import User
 import json
@@ -39,12 +40,15 @@ class Command(BaseCommand):
         for line in data:
             if 'fields' in line:
                 line = line['fields']
+
             if User.objects.filter(username=line['username']).exists():
                 print('Skipping {}, username exists'.format(line['username']))
                 continue
+
             if User.objects.filter(email=line['email']).exists():
                 print('Skipping {}, email exists'.format(line['email']))
                 continue
+
             User.objects.create(
                 username=line['username'],
                 first_name=line['first_name'],
