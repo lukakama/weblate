@@ -18,7 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from django.db import models, IntegrityError
+from django.db import models
 from django.dispatch import receiver
 from django.conf import settings
 from django.contrib.auth.signals import user_logged_in
@@ -662,13 +662,11 @@ def create_groups(update):
             anon_user.set_unusable_password()
             anon_user.groups.clear()
             anon_user.groups.add(guest_group)
-    except IntegrityError as error:
+    except:
         raise ValueError(
             'Anonymous user ({}) already exists and enabled, '
-            'please change ANONYMOUS_USER_NAME setting.\n'
-            'Raised error was: {!r}'.format(
+            'please change ANONYMOUS_USER_NAME setting.'.format(
                 ANONYMOUS_USER_NAME,
-                error
             )
         )
 
