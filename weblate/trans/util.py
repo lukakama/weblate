@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -100,6 +100,8 @@ def get_user_display(user, icon=True, link=False):
     '''
     Nicely formats user for display.
     '''
+    from weblate.appsettings import ENABLE_AVATARS
+
     # Did we get any user?
     if user is None:
         # None user, probably remotely triggered action
@@ -107,7 +109,7 @@ def get_user_display(user, icon=True, link=False):
         email = ''
     else:
         # Get full name
-        full_name = user.get_full_name()
+        full_name = user.first_name
 
         # Use user name if full name is empty
         if full_name.strip() == '':
@@ -119,7 +121,7 @@ def get_user_display(user, icon=True, link=False):
     full_name = escape(full_name)
 
     # Icon requested?
-    if icon:
+    if icon and ENABLE_AVATARS:
         # Get avatar image
         avatar = avatar_for_email(email, size=32)
 
@@ -175,8 +177,10 @@ def get_site_url(url=''):
     '''
     Returns root url of current site with domain.
     '''
+    from weblate.appsettings import ENABLE_HTTPS
     site = Site.objects.get_current()
-    return 'http://%s%s' % (
+    return '{0}://{1}{2}'.format(
+        'https' if ENABLE_HTTPS else 'http',
         site.domain,
         url
     )
@@ -196,10 +200,10 @@ def load_class(name):
     module, attr = name.rsplit('.', 1)
     try:
         mod = import_module(module)
-    except ImportError as e:
+    except ImportError as error:
         raise ImproperlyConfigured(
             'Error importing module %s: "%s"' %
-            (module, e)
+            (module, error)
         )
     try:
         cls = getattr(mod, attr)

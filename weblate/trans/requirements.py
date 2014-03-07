@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -138,6 +138,16 @@ def get_versions():
         url,
         mod.__version__,
         '0.3.2',
+    ))
+
+    name = 'gitdb'
+    url = 'https://github.com/gitpython-developers/gitdb'
+    mod = get_version_module('gitdb', name, url)
+    result.append((
+        name,
+        url,
+        mod.__version__,
+        '0.5.4',
     ))
 
     name = 'Git'

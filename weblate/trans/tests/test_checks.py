@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -72,10 +72,14 @@ class MockUnit(object):
         self.flags = flags
         self.translation = MockTranslation(code)
         self.source = source
+        self.fuzzy = False
 
     @property
     def all_flags(self):
         return self.flags.split(',')
+
+    def get_source_plurals(self):
+        return [self.source]
 
 
 class CheckTestCase(TestCase):

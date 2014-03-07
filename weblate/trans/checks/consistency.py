@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -50,6 +50,7 @@ class ConsistencyCheck(TargetCheck):
     description = _(
         'This message has more than one translation in this project'
     )
+    ignore_fuzzy = False
 
     def check(self, sources, targets, unit):
         from weblate.trans.models import Unit

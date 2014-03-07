@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -78,33 +78,33 @@ TIME_ZONE = 'Europe/Prague'
 LANGUAGE_CODE = 'en-us'
 
 LANGUAGES = (
-    ('be', u'беларуская'),
-    ('br', 'Brezhoneg'),
+    ('be', u'Беларуская'),
+    ('br', u'Brezhoneg'),
     ('ca', u'Català'),
-    ('cs', u'Česky'),
-    ('da', 'Dansk'),
-    ('de', 'Deutsch'),
-    ('en', 'English'),
+    ('cs', u'Čeština'),
+    ('da', u'Dansk'),
+    ('de', u'Deutsch'),
+    ('en', u'English'),
     ('el', u'Ελληνικά'),
     ('es', u'Español'),
-    ('fi', 'Suomi'),
+    ('fi', u'Suomi'),
     ('fr', u'Français'),
-    ('gl', 'Galego'),
-    ('he', u'עִבְרִית'),
-    ('hu', 'Magyar'),
+    ('gl', u'Galego'),
+    ('he', u'עברית'),
+    ('hu', u'Magyar'),
     ('id', 'Indonesia'),
     ('ja', u'日本語'),
     ('ko', u'한국어'),
-    ('nl', 'Nederlands'),
-    ('pl', 'Polski'),
+    ('nl', u'Nederlands'),
+    ('pl', u'Polski'),
     ('pt', u'Português'),
     ('pt_BR', u'Português brasileiro'),
-    ('ru', u'русский'),
+    ('ru', u'Русский'),
     ('sk', u'Slovenčina'),
     ('sl', u'Slovenščina'),
     ('sv', u'Svenska'),
     ('tr', u'Türkçe'),
-    ('uk', u'українська мова'),
+    ('uk', u'Українська'),
     ('zh_CN', u'简体字'),
     ('zh_TW', u'正體字'),
 )
@@ -122,7 +122,7 @@ USE_L10N = True
 # If you set this to False, Django will not use timezone-aware datetimes.
 USE_TZ = False
 
-# URL prefix to use
+# URL prefix to use, please see documentation for more details
 URL_PREFIX = ''
 
 # Absolute filesystem path to the directory that will hold user-uploaded files.
@@ -196,7 +196,7 @@ SOCIAL_AUTH_PIPELINE = (
     'social.pipeline.user.create_user',
     'social.pipeline.social_auth.associate_user',
     'social.pipeline.social_auth.load_extra_data',
-    'social.pipeline.user.user_details',
+    'weblate.accounts.pipeline.user_full_name',
     'weblate.accounts.pipeline.store_email',
 )
 

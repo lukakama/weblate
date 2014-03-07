@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -143,6 +143,8 @@ class Translation(models.Model, URLMixin, PercentMixin):
 
     objects = TranslationManager()
 
+    is_git_lockable = False
+
     class Meta:
         ordering = ['language__name']
         permissions = (
@@ -199,11 +201,11 @@ class Translation(models.Model, URLMixin, PercentMixin):
                 _('Format of %s could not be recognized.') %
                 self.filename
             )
-        except Exception as e:
+        except Exception as error:
             raise ValidationError(
                 _('Failed to parse file %(file)s: %(error)s') % {
                     'file': self.filename,
-                    'error': str(e)
+                    'error': str(error)
                 }
             )
 
@@ -379,9 +381,6 @@ class Translation(models.Model, URLMixin, PercentMixin):
             )
         )
 
-    def is_git_lockable(self):
-        return False
-
     @models.permalink
     def get_translate_url(self):
         return ('translate', (), {
@@ -537,7 +536,15 @@ class Translation(models.Model, URLMixin, PercentMixin):
             )
 
             # Check if unit is new and untranslated
-            was_new = was_new or (is_new and not newunit.translated)
+            was_new = (
+                was_new
+                or (is_new and not newunit.translated)
+                or (
+                    not newunit.translated
+                    and newunit.translated != newunit.old_translated
+                )
+                or (newunit.fuzzy and newunit.fuzzy != newunit.old_fuzzy)
+            )
 
             # Update position
             pos += 1
@@ -735,7 +742,7 @@ class Translation(models.Model, URLMixin, PercentMixin):
         Returns formatted author name with email.
         '''
         # Get full name from database
-        full_name = user.get_full_name()
+        full_name = user.first_name
 
         # Use username if full name is empty
         if full_name == '':
@@ -847,7 +854,7 @@ class Translation(models.Model, URLMixin, PercentMixin):
         gitrepo.git.commit(
             author=author.encode('utf-8'),
             date=timestamp.isoformat(),
-            m=msg
+            m=msg.encode('utf-8'),
         )
 
         # Optionally store updated hash

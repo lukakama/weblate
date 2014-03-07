@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -30,6 +30,13 @@ BBCODE_MATCH = re.compile(
 
 XML_MATCH = re.compile(r'<[^>]+>')
 XML_ENTITY_MATCH = re.compile(r'&#?\w+;')
+
+
+def strip_entities(text):
+    '''
+    Strips all HTML entities (we don't care about them).
+    '''
+    return XML_ENTITY_MATCH.sub('', text)
 
 
 class BBCodeCheck(TargetCheck):
@@ -69,17 +76,11 @@ class XMLTagsCheck(TargetCheck):
     name = _('XML tags mismatch')
     description = _('XML tags in translation do not match source')
 
-    def strip_entities(self, text):
-        '''
-        Strips all HTML entities (we don't care about them).
-        '''
-        return XML_ENTITY_MATCH.sub('', text)
-
     def parse_xml(self, text):
         '''
         Wrapper for parsing XML.
         '''
-        text = self.strip_entities(text.encode('utf-8'))
+        text = strip_entities(text.encode('utf-8'))
         return cElementTree.fromstring('<weblate>%s</weblate>' % text)
 
     def check_single(self, source, target, unit, cache_slot):
@@ -101,7 +102,7 @@ class XMLTagsCheck(TargetCheck):
                 source_tree = self.parse_xml(source)
                 source_tags = [x.tag for x in source_tree]
                 self.set_cache(unit, source_tags, cache_slot)
-            except:
+            except SyntaxError:
                 # Source is not valid XML, we give up
                 self.set_cache(unit, [], cache_slot)
                 return False
@@ -110,7 +111,7 @@ class XMLTagsCheck(TargetCheck):
         try:
             target_tree = self.parse_xml(target)
             target_tags = [x.tag for x in target_tree]
-        except:
+        except SyntaxError:
             # Target is not valid XML
             return True
 

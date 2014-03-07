@@ -4,12 +4,15 @@ Changes
 weblate 1.9
 -----------
 
-Released on ? 2013.
+Released on ? 2014.
 
 * Django 1.6 compatibility.
 * No longer maintained compatibility with Django 1.4.
 * Management commands for locking/unlocking translations.
 * Improved support for Qt TS files.
+* Users can now delete their account.
+* Avatars can be disabled.
+* Merged first and last name attributes.
 
 weblate 1.8
 -----------

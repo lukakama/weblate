@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -201,6 +201,7 @@ class TranslationForm(ChecksumForm):
         super(TranslationForm, self).__init__(
             translation, *args, **kwargs
         )
+        self.fields['fuzzy'].widget.attrs['class'] = 'fuzzy_checkbox'
         self.fields['target'].widget.attrs['tabindex'] = tabindex
 
 

@@ -16,7 +16,7 @@ All settings are stored in :file:`settings.py` (as usual for Django).
     Please check also `Django's documentation`_ for parameters which configure
     Django itself.
 
-.. _`Django's documentation`: https://docs.djangoproject.com/en/1.4/ref/settings/
+.. _`Django's documentation`: https://docs.djangoproject.com/en/1.6/ref/settings/
 
 .. setting:: ANONYMOUS_USER_NAME
 
@@ -102,6 +102,14 @@ For example you can enable only few of them:
 
 .. seealso:: :ref:`checks`, :ref:`custom-checks`
 
+.. setting:: ENABLE_AVATARS
+
+ENABLE_AVATARS
+--------------
+
+Whether to enable libravatar/gravatar based avatars for users. By default this
+is enabled.
+
 .. setting:: ENABLE_HOOKS
 
 ENABLE_HOOKS
@@ -110,6 +118,14 @@ ENABLE_HOOKS
 Whether to enable anonymous remote hooks.
 
 .. seealso:: :ref:`hooks`
+
+.. setting:: ENABLE_HTTPS
+
+ENABLE_HTTPS
+------------
+
+Whether to send links to the Weblate as https or http. This setting only
+affects sent mails.
 
 .. setting:: GIT_ROOT
 
@@ -347,6 +363,18 @@ Enables self advertisement of Weblate in case there are no configured ads.
 
 .. seealso:: :ref:`advertisement`
 
+.. setting:: SIMPLIFY_LANGUAGES
+
+SIMPLIFY_LANGUAGES
+------------------
+
+Use simple language codes for default language/country combinations. For
+example ``fr_FR`` translation will use ``fr`` language code. This is usually
+desired behavior as it simplifies listing of the languages for these default
+combinations.
+
+Disable this if you are having different translations for both variants.
+
 .. setting:: SITE_TITLE
 
 SITE_TITLE
@@ -368,6 +396,21 @@ TTF_PATH
 --------
 
 Path to Droid fonts used for widgets and charts.
+
+.. setting:: URL_PREFIX
+
+URL_PREFIX
+----------
+
+This settings allows you to run Weblate under some path (otherwise it relies on
+being executed from webserver root). To use this setting, you also need to
+configure your server to strip this prefix. For example with WSGI, this can be
+achieved by setting ``WSGIScriptAlias``.
+
+.. note::
+
+    This setting does not work with Django's builtin server, you would have to
+    adjust :file:`urls.py` to contain this prefix.
 
 .. setting:: WHOOSH_INDEX
 

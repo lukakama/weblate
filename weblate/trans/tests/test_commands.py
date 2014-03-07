@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -24,6 +24,7 @@ Tests for management commands.
 
 from django.test import TestCase
 from weblate.trans.tests.test_models import RepoTestCase
+from weblate.trans.models import SubProject
 from django.core.management import call_command
 from django.core.management.base import CommandError
 import django
@@ -296,3 +297,52 @@ class LockTranslationTest(CheckGitTest):
 
 class UnLockTranslationTest(CheckGitTest):
     command_name = 'unlock_translation'
+
+
+class LockingCommandTest(RepoTestCase):
+    '''
+    Test locking and unlocking.
+    '''
+    def setUp(self):
+        super(LockingCommandTest, self).setUp()
+        self.create_subproject()
+
+    def test_locking(self):
+        subproject = SubProject.objects.all()[0]
+        self.assertFalse(
+            SubProject.objects.filter(locked=True).exists()
+        )
+        call_command(
+            'lock_translation',
+            '{0}/{1}'.format(
+                subproject.project.slug,
+                subproject.slug,
+            )
+        )
+        self.assertTrue(
+            SubProject.objects.filter(locked=True).exists()
+        )
+        call_command(
+            'unlock_translation',
+            '{0}/{1}'.format(
+                subproject.project.slug,
+                subproject.slug,
+            )
+        )
+        self.assertFalse(
+            SubProject.objects.filter(locked=True).exists()
+        )
+
+
+class BenchmarkCommandTest(RepoTestCase):
+    '''
+    Benchmarking test.
+    '''
+    def setUp(self):
+        super(BenchmarkCommandTest, self).setUp()
+        self.create_subproject()
+
+    def test_benchmark(self):
+        call_command(
+            'benchmark', 'test', 'weblate://test/test', 'po/*.po'
+        )

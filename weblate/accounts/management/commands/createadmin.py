@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -33,8 +33,8 @@ class Command(BaseCommand):
         to be able to login remotely and change password then.
         '''
         user = User.objects.create_user('admin', 'admin@example.com', 'admin')
-        user.first_name = 'Weblate'
-        user.last_name = 'Admin'
+        user.first_name = 'Weblate Admin'
+        user.last_name = ''
         user.is_superuser = True
         user.is_staff = True
         user.is_active = True

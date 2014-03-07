@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -333,6 +333,8 @@ class Unit(models.Model):
         '''
         super(Unit, self).__init__(*args, **kwargs)
         self._all_flags = None
+        self.old_translated = self.translated
+        self.old_fuzzy = self.fuzzy
 
     def has_acl(self, user):
         '''
@@ -362,6 +364,10 @@ class Unit(models.Model):
         '''
         Updates Unit from ttkit unit.
         '''
+        # Store current values for use in Translation.check_sync
+        self.old_fuzzy = self.fuzzy
+        self.old_translated = self.translated
+
         # Get unit attributes
         location = unit.get_locations()
         flags = unit.get_flags()
@@ -806,7 +812,7 @@ class Unit(models.Model):
         checks_to_run = CHECKS
         cleanup_checks = True
 
-        if (same_state or is_new) and not self.translated:
+        if (not same_state or is_new) and not self.translated:
             # Check whether there is any message with same source
             project = self.translation.subproject.project
             same_source = Unit.objects.filter(

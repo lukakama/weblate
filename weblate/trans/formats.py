@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -42,6 +42,7 @@ import __builtin__
 
 FILE_FORMATS = {}
 FLAGS_RE = re.compile(r'\b[-\w]+\b')
+LOCATIONS_RE = re.compile(r'^([+-]|.*, [+-]|.*:[+-])')
 
 
 def register_fileformat(fileformat):
@@ -79,7 +80,12 @@ class FileUnit(object):
         if (isinstance(self.mainunit, xliffunit)
                 or isinstance(self.mainunit, phpunit)):
             return ''
-        return ', '.join(self.mainunit.getlocations())
+        result = ', '.join(self.mainunit.getlocations())
+        # Do not try to handle relative locations in Qt TS, see
+        # http://qt-project.org/doc/qt-4.8/linguist-ts-file-format.html
+        if LOCATIONS_RE.match(result):
+            return ''
+        return result
 
     def reformat_flags(self, typecomments):
         '''

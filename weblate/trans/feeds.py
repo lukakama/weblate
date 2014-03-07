@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -35,6 +35,8 @@ class ChangesFeed(Feed):
     '''
     Generic RSS feed for Weblate changes.
     '''
+    def get_object(self, request):
+        return request.user
 
     def title(self):
         return _('Recent changes in %s') % appsettings.SITE_TITLE
@@ -48,7 +50,7 @@ class ChangesFeed(Feed):
         return reverse('home')
 
     def items(self, obj):
-        return Change.objects.order_by('-timestamp')[:10]
+        return Change.objects.last_changes(obj)[:10]
 
     def item_title(self, item):
         return item.get_action_display()
@@ -86,7 +88,7 @@ class TranslationChangesFeed(ChangesFeed):
     def items(self, obj):
         return Change.objects.filter(
             translation=obj
-        ).order_by('-timestamp')[:10]
+        )[:10]
 
 
 class SubProjectChangesFeed(TranslationChangesFeed):
@@ -103,7 +105,7 @@ class SubProjectChangesFeed(TranslationChangesFeed):
     def items(self, obj):
         return Change.objects.filter(
             translation__subproject=obj
-        ).order_by('-timestamp')[:10]
+        )[:10]
 
 
 class ProjectChangesFeed(TranslationChangesFeed):
@@ -120,7 +122,7 @@ class ProjectChangesFeed(TranslationChangesFeed):
     def items(self, obj):
         return Change.objects.filter(
             translation__subproject__project=obj
-        ).order_by('-timestamp')[:10]
+        )[:10]
 
 
 class LanguageChangesFeed(TranslationChangesFeed):
@@ -137,4 +139,4 @@ class LanguageChangesFeed(TranslationChangesFeed):
     def items(self, obj):
         return Change.objects.filter(
             translation__language=obj
-        ).order_by('-timestamp')[:10]
+        )[:10]

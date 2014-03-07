@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -18,9 +18,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from django.shortcuts import render_to_response, get_object_or_404, redirect
+from django.shortcuts import render, get_object_or_404, redirect
 from django.utils.translation import ugettext as _
-from django.template import RequestContext
 from django.http import HttpResponse, HttpResponseRedirect
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
@@ -44,11 +43,15 @@ def show_dictionaries(request, project):
         subproject__project=obj
     ).values_list('language', flat=True).distinct()
 
-    return render_to_response('dictionaries.html', RequestContext(request, {
-        'title': _('Dictionaries'),
-        'dicts': Language.objects.filter(id__in=dicts),
-        'project': obj,
-    }))
+    return render(
+        request,
+        'dictionaries.html',
+        {
+            'title': _('Dictionaries'),
+            'dicts': Language.objects.filter(id__in=dicts),
+            'project': obj,
+        }
+    )
 
 
 @login_required
@@ -81,23 +84,27 @@ def edit_dictionary(request, project, lang):
             initial={'source': word.source, 'target': word.target}
         )
 
-    last_changes = Change.objects.filter(
+    last_changes = Change.objects.last_changes(request.user).filter(
         dictionary=word,
-    ).order_by('-timestamp')[:10]
+    )[:10]
 
-    return render_to_response('edit_dictionary.html', RequestContext(request, {
-        'title': _('%(language)s dictionary for %(project)s') %
-        {'language': lang, 'project': prj},
-        'project': prj,
-        'language': lang,
-        'form': form,
-        'last_changes': last_changes,
-        'last_changes_url': urlencode({
-            'project': prj.slug,
-            'lang': lang.code,
-            'glossary': 1
-        }),
-    }))
+    return render(
+        request,
+        'edit_dictionary.html',
+        {
+            'title': _('%(language)s dictionary for %(project)s') %
+            {'language': lang, 'project': prj},
+            'project': prj,
+            'language': lang,
+            'form': form,
+            'last_changes': last_changes,
+            'last_changes_url': urlencode({
+                'project': prj.slug,
+                'lang': lang.code,
+                'glossary': 1
+            }),
+        }
+    )
 
 
 @login_required
@@ -148,10 +155,10 @@ def upload_dictionary(request, project, lang):
                         request,
                         _('Imported %d words from file.') % count
                     )
-            except Exception as e:
+            except Exception as error:
                 messages.error(
                     request,
-                    _('File upload has failed: %s' % unicode(e))
+                    _('File upload has failed: %s' % unicode(error))
                 )
         else:
             messages.error(request, _('Failed to process form!'))
@@ -314,25 +321,29 @@ def show_dictionary(request, project, lang):
         # If page is out of range (e.g. 9999), deliver last page of results.
         words = paginator.page(paginator.num_pages)
 
-    last_changes = Change.objects.filter(
+    last_changes = Change.objects.last_changes(request.user).filter(
         dictionary__project=prj,
         dictionary__language=lang
-    ).order_by('-timestamp')[:10]
+    )[:10]
 
-    return render_to_response('dictionary.html', RequestContext(request, {
-        'title': _('%(language)s dictionary for %(project)s') %
-        {'language': lang, 'project': prj},
-        'project': prj,
-        'language': lang,
-        'words': words,
-        'form': form,
-        'uploadform': uploadform,
-        'letterform': letterform,
-        'letter': letter,
-        'last_changes': last_changes,
-        'last_changes_url': urlencode({
-            'project': prj.slug,
-            'lang': lang.code,
-            'glossary': 1
-        }),
-    }))
+    return render(
+        request,
+        'dictionary.html',
+        {
+            'title': _('%(language)s dictionary for %(project)s') %
+            {'language': lang, 'project': prj},
+            'project': prj,
+            'language': lang,
+            'words': words,
+            'form': form,
+            'uploadform': uploadform,
+            'letterform': letterform,
+            'letter': letter,
+            'last_changes': last_changes,
+            'last_changes_url': urlencode({
+                'project': prj.slug,
+                'lang': lang.code,
+                'glossary': 1
+            }),
+        }
+    )

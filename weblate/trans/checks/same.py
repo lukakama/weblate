@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -64,7 +64,9 @@ SAME_BLACKLIST = frozenset((
     'bios',
     'bit',
     'bitcoin',
+    'bitcoins',
     'bitmap',
+    'bitmaps',
     'block',
     'blog',
     'bluetooth',
@@ -107,6 +109,7 @@ SAME_BLACKLIST = frozenset((
     'dbm',
     'debian',
     'debug',
+    'default',
     'definition',
     'del',
     'delete',
@@ -182,6 +185,7 @@ SAME_BLACKLIST = frozenset((
     'gpx',
     'graphic',
     'graphics',
+    'grant',
     'gtk',
     'gzip',
     'hack',
@@ -193,6 +197,7 @@ SAME_BLACKLIST = frozenset((
     'headset',
     'help',
     'hmpf',
+    'home',
     'homepage',
     'hook',
     'horizontal',
@@ -279,19 +284,22 @@ SAME_BLACKLIST = frozenset((
     'mailbox',
     'mailboxes',
     'maildir',
+    'mailing',
     'markdown',
     'master',
     'max',
     'maximum',
     'media',
     'mediawiki',
+    'menu',
     'merge',
     'message',
     'messages',
     'meta',
     'metal',
+    'micropayment',
+    'micropayments',
     'microsoft',
-    'minute',
     'model',
     'module',
     'modules',
@@ -304,12 +312,15 @@ SAME_BLACKLIST = frozenset((
     'minimum',
     'mint',
     'minus',
+    'minute',
     'mm',
     'multiplayer',
     'musicbottle',
     'mv',
     'n/a',
     'name',
+    'namecoin',
+    'namecoins',
     'navigation',
     'neutral',
     'nimh',
@@ -402,8 +413,12 @@ SAME_BLACKLIST = frozenset((
     'rebase',
     'redhat',
     'regexp',
+    'relation',
+    'relations',
     'replication',
     'repository',
+    'report',
+    'reports',
     'reset',
     'resource',
     'rich-text',
@@ -439,6 +454,9 @@ SAME_BLACKLIST = frozenset((
     'sms',
     'smsc',
     'smsd',
+    'snapshot',
+    'snapshots',
+    'socket',
     'software',
     'solaris',
     'source',
@@ -454,6 +472,7 @@ SAME_BLACKLIST = frozenset((
     'strings',
     'structure',
     'style',
+    'submit',
     'subproject',
     'subquery',
     'substring',
@@ -496,6 +515,7 @@ SAME_BLACKLIST = frozenset((
     'ukolovnik',
     'unicode',
     'unique',
+    'unit',
     'update',
     'upload',
     'url',
@@ -911,7 +931,7 @@ class SameCheck(TargetCheck):
 
     def check_single(self, source, target, unit, cache_slot):
         # English variants will have most things not translated
-        if self.is_language(unit, ['en']):
+        if self.is_language(unit, ('en', )):
             return False
 
         # One letter things are usually labels or decimal/thousand separators

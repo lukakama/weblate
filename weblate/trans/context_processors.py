@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -42,6 +42,7 @@ def weblate_context(request):
 
         'offer_hosting': appsettings.OFFER_HOSTING,
         'demo_server': appsettings.DEMO_SERVER,
+        'enable_avatars': appsettings.ENABLE_AVATARS,
 
         'current_date': datetime.utcnow().strftime('%Y-%m-%d'),
         'current_year': datetime.utcnow().strftime('%Y'),

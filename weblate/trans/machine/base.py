@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -83,6 +83,7 @@ class MachineTranslation(object):
 
         # Create request object with custom headers
         request = urllib2.Request(url)
+        request.timeout = 0.5
         request.add_header('User-Agent', 'Weblate/%s' % weblate.VERSION)
         # Optional authentication
         if not skip_auth:

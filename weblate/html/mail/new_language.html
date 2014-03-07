@@ -24,8 +24,18 @@
 {{ language.name }} ({{ language.code }})
 </td>
 </tr>
+<tr>
+
+<th>
+{% trans "Requesting user:" %}
+
+</th>
+
+<td>
+<a href="mailto:{{ user.email }}">{{ user.first_name }}</a>
+</td>
+</tr>
 
 </table>
 
-{% include "mail/footer.html" %}
 {% endblock %}

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -180,6 +180,8 @@ class Project(models.Model, PercentMixin, URLMixin, PathMixin):
 
     objects = ProjectManager()
 
+    is_git_lockable = True
+
     class Meta:
         ordering = ['name']
         app_label = 'trans'
@@ -261,9 +263,6 @@ class Project(models.Model, PercentMixin, URLMixin, PathMixin):
         return get_site_url(
             reverse('engage', kwargs={'project': self.slug})
         )
-
-    def is_git_lockable(self):
-        return True
 
     def is_git_locked(self):
         return max(

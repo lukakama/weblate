@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -37,8 +37,8 @@ def validate_repoweb(val):
     '''
     try:
         val % {'file': 'file.po', 'line': '9', 'branch': 'master'}
-    except Exception as e:
-        raise ValidationError(_('Bad format string (%s)') % str(e))
+    except Exception as error:
+        raise ValidationError(_('Bad format string (%s)') % str(error))
 
 
 def validate_extra_file(val):
@@ -47,8 +47,8 @@ def validate_extra_file(val):
     '''
     try:
         val % {'language': 'cs'}
-    except Exception as e:
-        raise ValidationError(_('Bad format string (%s)') % str(e))
+    except Exception as error:
+        raise ValidationError(_('Bad format string (%s)') % str(error))
 
 
 def validate_commit_message(val):
@@ -67,8 +67,8 @@ def validate_commit_message(val):
             'translated': 40,
             'translated_percent': 20.0,
         }
-    except Exception as e:
-        raise ValidationError(_('Bad format string (%s)') % str(e))
+    except Exception as error:
+        raise ValidationError(_('Bad format string (%s)') % str(error))
 
 
 def validate_filemask(val):
@@ -88,7 +88,7 @@ def validate_repo(val):
     from weblate.trans.models import SubProject
     try:
         repo = SubProject.objects.get_linked(val)
-        if repo is not None and repo.is_repo_link():
+        if repo is not None and repo.is_repo_link:
             raise ValidationError(_('Can not link to linked repository!'))
     except (SubProject.DoesNotExist, ValueError):
         raise ValidationError(
