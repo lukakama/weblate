@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -30,7 +30,7 @@ class PluralsCheck(TargetCheck):
     name = _('Missing plurals')
     description = _('Some plural forms are not translated')
 
-    def check(self, sources, targets, unit):
+    def check_target_unit(self, sources, targets, unit):
         # Is this plural?
         if len(sources) == 1:
             return False
@@ -39,6 +39,12 @@ class PluralsCheck(TargetCheck):
             return False
         # Check for empty translation
         return '' in targets
+
+    def check_single(self, source, target, unit, cache_slot):
+        '''
+        We don't check target strings here.
+        '''
+        return False
 
 
 class ConsistencyCheck(TargetCheck):
@@ -50,8 +56,9 @@ class ConsistencyCheck(TargetCheck):
     description = _(
         'This message has more than one translation in this project'
     )
+    ignore_untranslated = False
 
-    def check(self, sources, targets, unit):
+    def check_target_unit(self, sources, targets, unit):
         from weblate.trans.models import Unit
         # Do not check consistency if user asked not to have it
         if not unit.translation.subproject.allow_translation_propagation:
@@ -70,4 +77,10 @@ class ConsistencyCheck(TargetCheck):
                 if unit2.translation.subproject.allow_translation_propagation:
                     return True
 
+        return False
+
+    def check_single(self, source, target, unit, cache_slot):
+        '''
+        We don't check target strings here.
+        '''
         return False

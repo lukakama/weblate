@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -18,123 +18,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import hashlib
 from django.core.exceptions import ImproperlyConfigured
 from django.contrib.sites.models import Site
-from django.utils.translation import pgettext
-from django.core.cache import cache
-from django.utils.html import escape
-from django.utils.safestring import mark_safe
-from django.core.urlresolvers import reverse
-from django.conf import settings
 from importlib import import_module
-import urllib
 import time
 import random
 import os.path
 
-try:
-    import libravatar
-    HAS_LIBRAVATAR = True
-except ImportError:
-    HAS_LIBRAVATAR = False
-
-AVATAR_URL_PREFIX = getattr(
-    settings,
-    'AVATAR_URL_PREFIX',
-    'https://seccdn.libravatar.org/'
-)
-# See http://wiki.libravatar.org/api/
-# for available choices
-AVATAR_DEFAULT_IMAGE = getattr(
-    settings,
-    'AVATAR_DEFAULT_IMAGE',
-    'identicon'
-)
-
 PLURAL_SEPARATOR = '\x1e\x1e'
-
-
-def avatar_for_email(email, size=80):
-    '''
-    Generates url for avatar.
-    '''
-
-    # Safely handle blank email
-    if email == '':
-        email = 'noreply@weblate.org'
-
-    # Retrieve from cache
-    cache_key = 'avatar-%s-%s' % (email, size)
-    url = cache.get(cache_key)
-    if url is not None:
-        return url
-
-    if HAS_LIBRAVATAR:
-        # Use libravatar library if available
-        url = libravatar.libravatar_url(
-            email=email,
-            https=True,
-            default=AVATAR_DEFAULT_IMAGE,
-            size=size
-        )
-
-    else:
-        # Fallback to standard method
-        mail_hash = hashlib.md5(email.lower()).hexdigest()
-
-        url = "%savatar/%s?" % (AVATAR_URL_PREFIX, mail_hash)
-
-        url += urllib.urlencode({
-            's': str(size),
-            'd': AVATAR_DEFAULT_IMAGE
-        })
-
-    # Store result in cache
-    cache.set(cache_key, url, 3600 * 24)
-
-    return escape(url)
-
-
-def get_user_display(user, icon=True, link=False):
-    '''
-    Nicely formats user for display.
-    '''
-    # Did we get any user?
-    if user is None:
-        # None user, probably remotely triggered action
-        full_name = pgettext('No known user', 'None')
-        email = ''
-    else:
-        # Get full name
-        full_name = user.get_full_name()
-
-        # Use user name if full name is empty
-        if full_name.strip() == '':
-            full_name = user.username
-
-        email = user.email
-
-    # Escape HTML
-    full_name = escape(full_name)
-
-    # Icon requested?
-    if icon:
-        # Get avatar image
-        avatar = avatar_for_email(email, size=32)
-
-        full_name = '<img src="%(avatar)s" class="avatar" /> %(name)s' % {
-            'name': full_name,
-            'avatar': avatar
-        }
-
-    if link and user is not None:
-        return mark_safe('<a href="%(link)s">%(name)s</a>' % {
-            'name': full_name,
-            'link': reverse('user_page', kwargs={'user': user.username}),
-        })
-    else:
-        return mark_safe(full_name)
 
 
 def is_plural(text):
@@ -175,8 +66,10 @@ def get_site_url(url=''):
     '''
     Returns root url of current site with domain.
     '''
+    from weblate.appsettings import ENABLE_HTTPS
     site = Site.objects.get_current()
-    return 'http://%s%s' % (
+    return '{0}://{1}{2}'.format(
+        'https' if ENABLE_HTTPS else 'http',
         site.domain,
         url
     )
@@ -196,10 +89,10 @@ def load_class(name):
     module, attr = name.rsplit('.', 1)
     try:
         mod = import_module(module)
-    except ImportError as e:
+    except ImportError as error:
         raise ImproperlyConfigured(
             'Error importing module %s: "%s"' %
-            (module, e)
+            (module, error)
         )
     try:
         cls = getattr(mod, attr)

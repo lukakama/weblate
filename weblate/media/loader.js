@@ -27,7 +27,10 @@ jQuery.fn.extend({
 
 
 function text_change(e) {
-    $('#id_fuzzy').prop('checked', false);
+    if (e.key && e.key == 'Tab') {
+        return;
+    }
+    $(this).parents('form').find('[name=fuzzy]').prop('checked', false);
 }
 
 function mt_set(txt) {
@@ -231,6 +234,31 @@ function load_progress() {
     $('div.progress .good').attr('title', gettext('Translated strings'));
 }
 
+function zen_editor(e) {
+    var $this = $(this);
+    var $row = $this.parents('tr');
+    var checksum = $row.find('[name=checksum]').val();
+
+    $row.addClass('translation-modified');
+
+    var form = $row.find('form');
+    $('#loading-' + checksum).show();
+    $('#messages-' + checksum).html('');
+    $.post(
+        form.attr('action'),
+        form.serialize(),
+        function (data) {
+            $('#loading-' + checksum).hide();
+            $('#messages-' + checksum).append(data);
+            $row.removeClass('translation-modified').addClass('translation-saved');
+        }
+    );
+}
+
+function init_editor(editors) {
+    editors.autogrow();
+}
+
 $(function () {
     $('.button').button();
     $('#breadcrumbs').buttonset();
@@ -249,8 +277,18 @@ $(function () {
     $('#navi .button-disabled').button('disable');
     var translation_editor = $('.translation-editor');
     if (translation_editor.length > 0) {
-        translation_editor.change(text_change).keypress(text_change).autogrow();
+        $(document).on('change', '.translation-editor', text_change);
+        $(document).on('keypress', '.translation-editor', text_change);
+        init_editor(translation_editor);
         translation_editor.get(0).focus();
+        if ($('#button-first').length > 0) {
+            Mousetrap.bindGlobal('alt+end', function(e) {window.location = $('#button-end').attr('href'); return false;});
+            Mousetrap.bindGlobal('alt+pagedown', function(e) {window.location = $('#button-next').attr('href'); return false;});
+            Mousetrap.bindGlobal('alt+pageup', function(e) {window.location = $('#button-prev').attr('href'); return false;});
+            Mousetrap.bindGlobal('alt+home', function(e) {window.location = $('#button-first').attr('href'); return false;});
+            Mousetrap.bindGlobal('alt+enter', function(e) {$('.translation-form').submit(); return false;});
+            Mousetrap.bindGlobal('ctrl+enter', function(e) {$('.translation-form').submit(); return false;});
+        }
     }
     $('#toggle-direction').buttonset().change(function (e) {
         $('.translation-editor').attr('dir', $("#toggle-direction :radio:checked").attr('value')).focus();
@@ -425,7 +463,6 @@ $(function () {
         }, 19000);
     }
     if ($('.zen').length > 0) {
-        var lastrow = null;
         $(window).scroll(function(){
             if ($(window).scrollTop() >= $(document).height() - (2 * $(window).height())) {
                 if ($('#last-section').length > 0 || $('#loading-next').css('display') != 'none') {
@@ -437,36 +474,27 @@ $(function () {
                 loader.data('offset', 20 + parseInt(loader.data('offset')));
 
                 $.get(
-                    loader.attr('href') + '?offset=' + loader.data('offset'),
+                    loader.attr('href') + '&offset=' + loader.data('offset'),
                     function (data) {
                         $('#loading-next').hide();
-                        $('.zen tbody').append(data);
+
+                        $('.zen tbody').append(data).find('.button').button();
+
+                        var $editors = $('.translation-editor');
+
+                        init_editor($editors);
                     }
                 );
             }
         });
-        translation_editor.change(function (e) {
-            var $this = $(this);
-            var $row = $this.parents('tr');
-            var checksum = $row.find('[name=checksum]').val();
+        $(document).on('change', '.translation-editor', zen_editor);
+        $(document).on('change', '.fuzzy_checkbox', zen_editor);
 
-            $row.addClass('translation-modified');
-
-            if (lastrow != $row.attr('id')) {
-                var form = $row.find('form');
-                console.log('should save! ' + form.attr('action'));
-                $('#loading-' + checksum).show();
-                $('#messages-' + checksum).html('');
-                $.post(
-                    form.attr('action'),
-                    form.serialize(),
-                    function (data) {
-                        $('#loading-' + checksum).hide();
-                        $('#messages-' + checksum).append(data);
-                    }
-                );
+        $(window).on('beforeunload', function(){
+            if ($('.translation-modified').length > 0) {
+                return gettext('There are some unsaved changes, are you sure you want to leave?');
             }
-            lastrow = $row.attr('id');
         });
+
     }
 });

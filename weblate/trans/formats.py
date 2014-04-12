@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -42,6 +42,7 @@ import __builtin__
 
 FILE_FORMATS = {}
 FLAGS_RE = re.compile(r'\b[-\w]+\b')
+LOCATIONS_RE = re.compile(r'^([+-]|.*, [+-]|.*:[+-])')
 
 
 def register_fileformat(fileformat):
@@ -79,7 +80,12 @@ class FileUnit(object):
         if (isinstance(self.mainunit, xliffunit)
                 or isinstance(self.mainunit, phpunit)):
             return ''
-        return ', '.join(self.mainunit.getlocations())
+        result = ', '.join(self.mainunit.getlocations())
+        # Do not try to handle relative locations in Qt TS, see
+        # http://qt-project.org/doc/qt-4.8/linguist-ts-file-format.html
+        if LOCATIONS_RE.match(result):
+            return ''
+        return result
 
     def reformat_flags(self, typecomments):
         '''
@@ -346,16 +352,9 @@ class FileFormat(object):
     def parse_store(cls, storefile):
         # Tuple style loader, import from translate toolkit
         module_name, class_name = cls.loader
-        try:
-            # Try bultin ttkit copy
-            # (only valid for aresource)
-            module = importlib.import_module(
-                'ttkit.%s' % module_name
-            )
-        except ImportError:
-            module = importlib.import_module(
-                'translate.storage.%s' % module_name
-            )
+        module = importlib.import_module(
+            'translate.storage.%s' % module_name
+        )
 
         # Get the class
         storeclass = getattr(module, class_name)
@@ -387,7 +386,7 @@ class FileFormat(object):
         '''
         return (
             (self.monolingual or self.monolingual is None)
-            and not self.template_store is None
+            and self.template_store is not None
         )
 
     def find_unit(self, context, source):
@@ -453,7 +452,7 @@ class FileFormat(object):
 
         # Adjust Content-Type header if needed
         header = self.store.parseheader()
-        if (not 'Content-Type' in header
+        if ('Content-Type' not in header
                 or 'charset=CHARSET' in header['Content-Type']
                 or 'charset=ASCII' in header['Content-Type']):
             kwargs['Content_Type'] = 'text/plain; charset=UTF-8'

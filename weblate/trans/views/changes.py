@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -126,7 +126,7 @@ class ChangesView(ListView):
         # Glossary entries
         self.glossary = 'glossary' in self.request.GET
 
-        result = Change.objects.prefetch()
+        result = Change.objects.last_changes(self.request.user)
 
         if self.translation is not None:
             result = result.filter(

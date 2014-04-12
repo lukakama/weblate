@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -161,3 +161,19 @@ SOURCE_LANGUAGE = get('SOURCE_LANGUAGE', 'en')
 
 # Self advertisement
 SELF_ADVERTISEMENT = get('SELF_ADVERTISEMENT', False)
+
+# Use simple language codes for default language/country combinations
+SIMPLIFY_LANGUAGES = get('SIMPLIFY_LANGUAGES', True)
+
+# Disable avatars
+ENABLE_AVATARS = get('ENABLE_AVATARS', True)
+
+# Avatar URL prefix
+AVATAR_URL_PREFIX = get('AVATAR_URL_PREFIX', 'https://seccdn.libravatar.org/')
+
+# Avatar fallback image
+# See http://wiki.libravatar.org/api/ for available choices
+AVATAR_DEFAULT_IMAGE = get('AVATAR_DEFAULT_IMAGE', 'identicon')
+
+# Is the site using https
+ENABLE_HTTPS = get('ENABLE_HTTPS', False)

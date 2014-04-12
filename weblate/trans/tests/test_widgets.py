@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -72,11 +72,15 @@ class WidgetsTest(ViewTestCase):
                             'project': self.project.slug,
                             'widget': widget,
                             'color': color,
+                            'extension': 'png',
                         }
                     )
                 )
-                # This is pretty stupid test for PNG image
-                self.assertPNG(response)
+
+                if hasattr(WIDGETS[widget], 'redirect'):
+                    self.assertEquals(response.status_code, 302)
+                else:
+                    self.assertPNG(response)
 
     def test_view_widget_image_lang(self):
         for widget in WIDGETS:
@@ -89,8 +93,12 @@ class WidgetsTest(ViewTestCase):
                             'widget': widget,
                             'color': color,
                             'lang': 'cs',
+                            'extension': 'png',
                         }
                     )
                 )
-                # This is pretty stupid test for PNG image
-                self.assertPNG(response)
+
+                if hasattr(WIDGETS[widget], 'redirect'):
+                    self.assertEquals(response.status_code, 302)
+                else:
+                    self.assertPNG(response)

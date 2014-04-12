@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -42,7 +42,7 @@ class WeblateExceptionReporterFilter(SafeExceptionReporterFilter):
 
         if (hasattr(request, 'user')
                 and request.user.is_authenticated()):
-            user = request.user.username
+            user = repr(request.user.username)
         else:
             user = None
 

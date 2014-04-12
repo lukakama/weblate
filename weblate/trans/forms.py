@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -115,7 +115,7 @@ class PluralTextarea(forms.Textarea):
         ret = [data.get(name, None)]
         for idx in range(1, 10):
             fieldname = '%s_%d' % (name, idx)
-            if not fieldname in data:
+            if fieldname not in data:
                 break
             ret.append(data.get(fieldname, None))
         ret = [smart_unicode(r.replace('\r', '')) for r in ret]
@@ -201,6 +201,7 @@ class TranslationForm(ChecksumForm):
         super(TranslationForm, self).__init__(
             translation, *args, **kwargs
         )
+        self.fields['fuzzy'].widget.attrs['class'] = 'fuzzy_checkbox'
         self.fields['target'].widget.attrs['tabindex'] = tabindex
 
 

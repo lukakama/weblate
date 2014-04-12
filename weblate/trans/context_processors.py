@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -31,6 +31,11 @@ def weblate_context(request):
     '''
     Context processor to inject various useful variables into context.
     '''
+    if 'next' in request.GET:
+        login_redirect_url = request.GET['next']
+    else:
+        login_redirect_url = request.get_full_path()
+
     return {
         'version': weblate.VERSION,
 
@@ -42,12 +47,13 @@ def weblate_context(request):
 
         'offer_hosting': appsettings.OFFER_HOSTING,
         'demo_server': appsettings.DEMO_SERVER,
+        'enable_avatars': appsettings.ENABLE_AVATARS,
 
         'current_date': datetime.utcnow().strftime('%Y-%m-%d'),
         'current_year': datetime.utcnow().strftime('%Y'),
         'current_month': datetime.utcnow().strftime('%m'),
 
-        'current_url': request.get_full_path(),
+        'login_redirect_url': login_redirect_url,
 
         'mt_enabled': appsettings.MACHINE_TRANSLATION_ENABLED,
         'hooks_enabled': appsettings.ENABLE_HOOKS,

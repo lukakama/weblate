@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -19,8 +19,7 @@
 #
 
 from django.http import HttpResponse, Http404
-from django.template import RequestContext
-from django.shortcuts import render_to_response
+from django.shortcuts import render, redirect
 from django.core.urlresolvers import reverse
 from django.views.decorators.cache import cache_page
 
@@ -33,9 +32,20 @@ from weblate.trans.views.helper import get_project, try_set_language
 
 
 def widgets_root(request):
-    return render_to_response('widgets-root.html', RequestContext(request, {
-        'projects': Project.objects.all_acl(request.user),
-    }))
+    return render(
+        request,
+        'widgets-root.html',
+        {
+            'projects': Project.objects.all_acl(request.user),
+        }
+    )
+
+
+def widgets_sorter(widget):
+    """
+    Provides better ordering of widgets.
+    """
+    return WIDGETS[widget].order
 
 
 def widgets(request, project):
@@ -60,7 +70,7 @@ def widgets(request, project):
         reverse('widgets', kwargs={'project': obj.slug})
     )
     widget_list = []
-    for widget_name in WIDGETS:
+    for widget_name in sorted(WIDGETS, key=widgets_sorter):
         widget_class = WIDGETS[widget_name]
         color_list = []
         for color in widget_class.colors:
@@ -71,6 +81,7 @@ def widgets(request, project):
                         'project': obj.slug,
                         'widget': widget_name,
                         'color': color,
+                        'extension': widget_class.extension,
                     }
                 )
             else:
@@ -80,7 +91,8 @@ def widgets(request, project):
                         'project': obj.slug,
                         'widget': widget_name,
                         'color': color,
-                        'lang': lang.code
+                        'lang': lang.code,
+                        'extension': widget_class.extension,
                     }
                 )
             color_list.append({
@@ -92,19 +104,24 @@ def widgets(request, project):
             'colors': color_list,
         })
 
-    return render_to_response('widgets.html', RequestContext(request, {
-        'engage_url': engage_url,
-        'engage_url_track': engage_url_track,
-        'widget_list': widget_list,
-        'widget_base_url': widget_base_url,
-        'object': obj,
-        'image_src': widget_list[0]['colors'][0]['url'],
-        'form': form,
-    }))
+    return render(
+        request,
+        'widgets.html',
+        {
+            'engage_url': engage_url,
+            'engage_url_track': engage_url_track,
+            'widget_list': widget_list,
+            'widget_base_url': widget_base_url,
+            'object': obj,
+            'image_src': widget_list[0]['colors'][0]['url'],
+            'form': form,
+        }
+    )
 
 
 @cache_page(3600)
-def render(request, project, widget='287x66', color=None, lang=None):
+def render_widget(request, project, widget='287x66', color=None, lang=None,
+                  extension='png'):
     obj = get_project(request, project)
 
     # Handle language parameter
@@ -120,10 +137,17 @@ def render(request, project, widget='287x66', color=None, lang=None):
     # Construct object
     widget = widget_class(obj, color, lang)
 
+    # Redirect widget
+    if hasattr(widget, 'redirect'):
+        return redirect(widget.redirect())
+
     # Render widget
     widget.render()
 
     # Get image data
     data = widget.get_image()
 
-    return HttpResponse(content_type='image/png', content=data)
+    return HttpResponse(
+        content_type=widget.content_type,
+        content=data
+    )

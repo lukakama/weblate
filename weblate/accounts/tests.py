@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -55,8 +55,7 @@ from weblate import appsettings
 REGISTRATION_DATA = {
     'username': 'username',
     'email': 'noreply@weblate.org',
-    'first_name': 'First',
-    'last_name': 'Last',
+    'first_name': 'First Last',
     'captcha_id': '00',
     'captcha': '9999'
 }
@@ -85,6 +84,9 @@ class RegistrationTest(TestCase):
         )
 
     def test_register_captcha(self):
+        # Enable captcha
+        appsettings.REGISTRATION_CAPTCHA = True
+
         response = self.client.post(
             reverse('register'),
             REGISTRATION_DATA
@@ -126,8 +128,7 @@ class RegistrationTest(TestCase):
         # Verify user is active
         self.assertTrue(user.is_active)
         # Verify stored first/last name
-        self.assertEqual(user.first_name, 'First')
-        self.assertEqual(user.last_name, 'Last')
+        self.assertEqual(user.first_name, 'First Last')
 
         # Restore settings
         appsettings.REGISTRATION_CAPTCHA = True
@@ -197,8 +198,8 @@ class CommandTest(TestCase):
     def test_createadmin(self):
         call_command('createadmin')
         user = User.objects.get(username='admin')
-        self.assertEqual(user.first_name, 'Weblate')
-        self.assertEqual(user.last_name, 'Admin')
+        self.assertEqual(user.first_name, 'Weblate Admin')
+        self.assertEqual(user.last_name, '')
 
     def test_setupgroups(self):
         call_command('setupgroups')
@@ -222,6 +223,11 @@ class CommandTest(TestCase):
         user2 = User.objects.get(username='weblate')
         self.assertEqual(user.first_name, user2.first_name)
 
+    def test_importdjangousers(self):
+        # First import
+        call_command('importusers', get_test_file('users-django.json'))
+        self.assertEquals(User.objects.count(), 2)
+
 
 class ViewTest(TestCase):
     '''
@@ -233,8 +239,7 @@ class ViewTest(TestCase):
             username='testuser',
             password='testpassword'
         )
-        user.first_name = 'First'
-        user.last_name = 'Second'
+        user.first_name = 'First Second'
         user.email = 'noreply@weblate.org'
         user.save()
         Profile.objects.get_or_create(user=user)
@@ -355,6 +360,19 @@ class ViewTest(TestCase):
         response = self.client.get(reverse('logout'))
         self.assertRedirects(response, reverse('login'))
 
+    def test_removal(self):
+        # Create user
+        self.get_user()
+        # Login
+        self.client.login(username='testuser', password='testpassword')
+        response = self.client.post(
+            reverse('remove')
+        )
+        self.assertRedirects(response, reverse('home'))
+        self.assertFalse(
+            User.objects.filter(username='testuser').exists()
+        )
+
 
 class ProfileTest(ViewTestCase):
     def test_profile(self):
@@ -369,8 +387,7 @@ class ProfileTest(ViewTestCase):
                 'language': 'cs',
                 'languages': Language.objects.get(code='cs').id,
                 'secondary_languages': Language.objects.get(code='cs').id,
-                'first_name': 'First',
-                'last_name': 'Last',
+                'first_name': 'First Last',
                 'email': 'noreply@weblate.org',
                 'username': 'testik',
             }

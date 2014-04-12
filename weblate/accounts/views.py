@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -18,8 +18,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from django.shortcuts import render_to_response, get_object_or_404, redirect
-from django.template import RequestContext
+from django.shortcuts import render, get_object_or_404, redirect
+from django.views.decorators.cache import cache_page
+from django.http import HttpResponse
+from django.contrib.auth import logout
 from django.conf import settings
 from django.contrib import messages
 from django.utils.translation import ugettext as _
@@ -27,7 +29,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.mail.message import EmailMultiAlternatives
 from django.utils import translation
 from django.contrib.auth.models import User
-from django.contrib.auth.views import login, logout
+from django.contrib.auth import views as auth_views
 from django.views.generic import TemplateView
 from urllib import urlencode
 
@@ -39,7 +41,9 @@ from social.backends.utils import load_backends
 from social.apps.django_app.utils import BACKENDS
 from social.apps.django_app.views import complete
 
-from weblate.accounts.models import set_lang, Profile
+import weblate
+from weblate.accounts.avatar import get_avatar_image
+from weblate.accounts.models import set_lang, remove_user, Profile
 from weblate.trans.models import Change, Project
 from weblate.accounts.forms import (
     ProfileForm, SubscriptionForm, UserForm, ContactForm
@@ -81,11 +85,23 @@ class RegistrationTemplateView(TemplateView):
         return context
 
 
-def mail_admins_contact(subject, message, context, sender):
+def mail_admins_contact(request, subject, message, context, sender):
     '''
     Sends a message to the admins, as defined by the ADMINS setting.
     '''
+    weblate.logger.info(
+        'contact from from %s: %s',
+        sender,
+        subject,
+    )
     if not settings.ADMINS:
+        messages.error(
+            request,
+            _('Message could not be sent to administrator!')
+        )
+        weblate.logger.error(
+            'ADMINS not configured, can not send message!'
+        )
         return
 
     mail = EmailMultiAlternatives(
@@ -96,6 +112,11 @@ def mail_admins_contact(subject, message, context, sender):
     )
 
     mail.send(fail_silently=False)
+
+    messages.info(
+        request,
+        _('Message has been sent to administrator.')
+    )
 
 
 @login_required
@@ -164,22 +185,25 @@ def user_profile(request):
         x for x in all_backends
         if x == 'email' or x not in social_names
     ]
+    license_projects = Project.objects.all_acl(
+        request.user
+    ).exclude(
+        license=''
+    )
 
-    response = render_to_response(
+    response = render(
+        request,
         'accounts/profile.html',
-        RequestContext(
-            request,
-            {
-                'form': form,
-                'userform': userform,
-                'subscriptionform': subscriptionform,
-                'profile': profile,
-                'title': _('User profile'),
-                'licenses': Project.objects.exclude(license=''),
-                'associated': social,
-                'new_backends': new_backends,
-            }
-        )
+        {
+            'form': form,
+            'userform': userform,
+            'subscriptionform': subscriptionform,
+            'profile': profile,
+            'title': _('User profile'),
+            'licenses': license_projects,
+            'associated': social,
+            'new_backends': new_backends,
+        }
     )
     response.set_cookie(
         settings.LANGUAGE_COOKIE_NAME,
@@ -188,13 +212,33 @@ def user_profile(request):
     return response
 
 
+@login_required
+def user_remove(request):
+    if request.method == 'POST':
+        remove_user(request.user)
+
+        logout(request)
+
+        messages.info(
+            request,
+            _('Your account has been removed.')
+        )
+
+        return redirect('home')
+
+    return render(
+        request,
+        'accounts/removal.html',
+    )
+
+
 def get_initial_contact(request):
     '''
     Fills in initial contact form fields from request.
     '''
     initial = {}
     if request.user.is_authenticated():
-        initial['name'] = request.user.get_full_name()
+        initial['name'] = request.user.first_name
         initial['email'] = request.user.email
     return initial
 
@@ -204,14 +248,11 @@ def contact(request):
         form = ContactForm(request.POST)
         if form.is_valid():
             mail_admins_contact(
+                request,
                 '%(subject)s',
                 CONTACT_TEMPLATE,
                 form.cleaned_data,
                 form.cleaned_data['email'],
-            )
-            messages.info(
-                request,
-                _('Message has been sent to administrator.')
             )
             return redirect('home')
     else:
@@ -220,15 +261,13 @@ def contact(request):
             initial['subject'] = request.GET['subject']
         form = ContactForm(initial=initial)
 
-    return render_to_response(
+    return render(
+        request,
         'accounts/contact.html',
-        RequestContext(
-            request,
-            {
-                'form': form,
-                'title': _('Contact'),
-            }
-        )
+        {
+            'form': form,
+            'title': _('Contact'),
+        }
     )
 
 
@@ -243,29 +282,24 @@ def hosting(request):
         form = HostingForm(request.POST)
         if form.is_valid():
             mail_admins_contact(
+                request,
                 'Hosting request for %(project)s',
                 HOSTING_TEMPLATE,
                 form.cleaned_data,
                 form.cleaned_data['email'],
-            )
-            messages.info(
-                request,
-                _('Message has been sent to administrator.')
             )
             return redirect('home')
     else:
         initial = get_initial_contact(request)
         form = HostingForm(initial=initial)
 
-    return render_to_response(
+    return render(
+        request,
         'accounts/hosting.html',
-        RequestContext(
-            request,
-            {
-                'form': form,
-                'title': _('Hosting'),
-            }
-        )
+        {
+            'form': form,
+            'title': _('Hosting'),
+        }
     )
 
 
@@ -276,13 +310,9 @@ def user_page(request, user):
     user = get_object_or_404(User, username=user)
     profile = get_object_or_404(Profile, user=user)
 
-    # Projects user is allowed to see
-    acl_projects = Project.objects.all_acl(request.user)
-
     # Filter all user activity
-    all_changes = Change.objects.filter(
+    all_changes = Change.objects.last_changes(request.user).filter(
         user=user,
-        translation__subproject__project__in=acl_projects,
     )
 
     # Last user activity
@@ -294,20 +324,31 @@ def user_page(request, user):
     ))
     user_projects = Project.objects.filter(id__in=user_projects_ids)
 
-    return render_to_response(
+    return render(
+        request,
         'accounts/user.html',
-        RequestContext(
-            request,
-            {
-                'page_profile': profile,
-                'page_user': user,
-                'last_changes': last_changes,
-                'last_changes_url': urlencode(
-                    {'user': user.username.encode('utf-8')}
-                ),
-                'user_projects': user_projects,
-            }
-        )
+        {
+            'page_profile': profile,
+            'page_user': user,
+            'last_changes': last_changes,
+            'last_changes_url': urlencode(
+                {'user': user.username.encode('utf-8')}
+            ),
+            'user_projects': user_projects,
+        }
+    )
+
+
+@cache_page(3600 * 24)
+def user_avatar(request, user, size):
+    '''
+    User avatar page.
+    '''
+    user = get_object_or_404(User, username=user)
+
+    return HttpResponse(
+        content_type='image/png',
+        content=get_avatar_image(user, size)
     )
 
 
@@ -323,7 +364,7 @@ def weblate_login(request):
     if 'message' in request.GET:
         messages.info(request, request.GET['message'])
 
-    return login(
+    return auth_views.login(
         request,
         template_name='accounts/login.html',
         authentication_form=LoginForm,
@@ -343,7 +384,7 @@ def weblate_logout(request):
     '''
     messages.info(request, _('Thanks for using Weblate!'))
 
-    return logout(
+    return auth_views.logout(
         request,
         next_page=settings.LOGIN_URL,
     )
@@ -367,17 +408,15 @@ def register(request):
 
     backends = set(load_backends(BACKENDS).keys())
 
-    return render_to_response(
+    return render(
+        request,
         'accounts/register.html',
-        RequestContext(
-            request,
-            {
-                'registration_email': 'email' in backends,
-                'registration_backends': backends - set(['email']),
-                'title': _('User registration'),
-                'form': form,
-            }
-        )
+        {
+            'registration_email': 'email' in backends,
+            'registration_backends': backends - set(['email']),
+            'title': _('User registration'),
+            'form': form,
+        }
     )
 
 
@@ -393,15 +432,13 @@ def email_login(request):
     else:
         form = EmailForm()
 
-    return render_to_response(
+    return render(
+        request,
         'accounts/email.html',
-        RequestContext(
-            request,
-            {
-                'title': _('Register email'),
-                'form': form,
-            }
-        )
+        {
+            'title': _('Register email'),
+            'form': form,
+        }
     )
 
 
@@ -451,16 +488,14 @@ def password(request):
     else:
         form = PasswordForm()
 
-    return render_to_response(
+    return render(
+        request,
         'accounts/password.html',
-        RequestContext(
-            request,
-            {
-                'title': _('Change password'),
-                'change_form': change_form,
-                'form': form,
-            }
-        )
+        {
+            'title': _('Change password'),
+            'change_form': change_form,
+            'form': form,
+        }
     )
 
 
@@ -478,13 +513,11 @@ def reset_password(request):
     else:
         form = ResetForm()
 
-    return render_to_response(
+    return render(
+        request,
         'accounts/reset.html',
-        RequestContext(
-            request,
-            {
-                'title': _('Password reset'),
-                'form': form,
-            }
-        )
+        {
+            'title': _('Password reset'),
+            'form': form,
+        }
     )

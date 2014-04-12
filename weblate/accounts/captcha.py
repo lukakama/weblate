@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -63,7 +63,7 @@ class MathCaptcha(object):
         if operator == '-':
             first += self.interval[1]
 
-        return '{} {} {}'.format(
+        return '{0} {1} {2}'.format(
             first,
             operator,
             second
@@ -106,7 +106,7 @@ class MathCaptcha(object):
         Gets unicode for display.
         '''
         parts = self.question.split()
-        return u'{} {} {}'.format(
+        return u'{0} {1} {2}'.format(
             parts[0],
             self.operators_display[parts[1]],
             parts[2],
@@ -117,7 +117,7 @@ def format_timestamp(timestamp):
     '''
     Formats timestamp in a form usable in captcha.
     '''
-    return '{:>010x}'.format(int(timestamp))
+    return '{0:>010x}'.format(int(timestamp))
 
 
 def checksum_question(question, timestamp):
@@ -134,7 +134,7 @@ def hash_question(question, timestamp):
     '''
     timestamp = format_timestamp(timestamp)
     hexsha = checksum_question(question, timestamp)
-    return '{}{}{}'.format(
+    return '{0}{1}{2}'.format(
         hexsha,
         timestamp,
         question.encode('base64')

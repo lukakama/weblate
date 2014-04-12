@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -29,6 +29,7 @@ from glob import glob
 import os
 import weblate
 import git
+from gitdb.exc import ODBError
 from weblate.trans.formats import FILE_FORMAT_CHOICES, FILE_FORMATS
 from weblate.trans.models.project import Project
 from weblate.trans.mixins import PercentMixin, URLMixin, PathMixin
@@ -41,6 +42,7 @@ from weblate.trans.validators import (
     validate_extra_file, validate_autoaccept,
     validate_check_flags,
 )
+from weblate.lang.models import Language
 from weblate.appsettings import SCRIPT_CHOICES
 
 
@@ -239,6 +241,8 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
 
     objects = SubProjectManager()
 
+    is_git_lockable = True
+
     class Meta:
         ordering = ['project__name', 'name']
         unique_together = (
@@ -261,6 +265,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         self._file_format = None
         self._template_store = None
         self._all_flags = None
+        self._linked_subproject = None
 
     def has_acl(self, user):
         '''
@@ -306,9 +311,6 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             reverse('engage', kwargs={'project': self.project.slug})
         )
 
-    def is_git_lockable(self):
-        return True
-
     def is_git_locked(self):
         return self.locked
 
@@ -322,7 +324,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Returns full path to subproject git repository.
         '''
-        if self.is_repo_link():
+        if self.is_repo_link:
             return self.linked_subproject.get_path()
         else:
             return os.path.join(self.project.get_path(), self.slug)
@@ -349,10 +351,11 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Returns true if push is possible for this subproject.
         '''
-        if self.is_repo_link():
+        if self.is_repo_link:
             return self.linked_subproject.can_push()
         return self.push != '' and self.push is not None
 
+    @property
     def is_repo_link(self):
         '''
         Checks whether repository is just a link for other one.
@@ -370,13 +373,18 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Returns subproject for linked repo.
         '''
-        return SubProject.objects.get_linked(self.repo)
+        if self._linked_subproject is None:
+            self._linked_subproject = SubProject.objects.get_linked(self.repo)
+        return self._linked_subproject
 
     @property
     def git_repo(self):
         '''
         Gets Git repository object.
         '''
+        if self.is_repo_link:
+            return self.linked_subproject.git_repo
+
         if self._git_repo is None:
             path = self.get_path()
             try:
@@ -391,13 +399,19 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Returns latest remote commit we know.
         '''
-        return self.git_repo.commit('origin/%s' % self.branch)
+        try:
+            return self.git_repo.commit('origin/%s' % self.branch)
+        except ODBError:
+            # Try to reread git database in case our in memory object is not
+            # up to date with it.
+            self.git_repo.odb.update_cache(True)
+            return self.git_repo.commit('origin/%s' % self.branch)
 
     def get_repo_url(self):
         '''
         Returns link to repository.
         '''
-        if self.is_repo_link():
+        if self.is_repo_link:
             return self.linked_subproject.repo
         return self.repo
 
@@ -405,7 +419,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Returns branch in repository.
         '''
-        if self.is_repo_link():
+        if self.is_repo_link:
             return self.linked_subproject.branch
         return self.branch
 
@@ -413,7 +427,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Returns URL of exported git repository.
         '''
-        if self.is_repo_link():
+        if self.is_repo_link:
             return self.linked_subproject.git_export
         return self.git_export
 
@@ -425,7 +439,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         repository path here.
         '''
         if len(self.repoweb) == 0:
-            if self.is_repo_link():
+            if self.is_repo_link:
                 return self.linked_subproject.get_repoweb_link(filename, line)
             return None
 
@@ -439,7 +453,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Pulls from remote repository.
         '''
-        if self.is_repo_link():
+        if self.is_repo_link:
             return self.linked_subproject.update_remote_branch(validate)
 
         # Update
@@ -452,8 +466,8 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                 # so we will sleep a bit an retry
                 sleep_while_git_locked()
                 self.git_repo.git.remote('update', 'origin')
-        except Exception as e:
-            error_text = str(e)
+        except Exception as error:
+            error_text = str(error)
             weblate.logger.error('Failed to update Git repo: %s', error_text)
             if validate:
                 if 'Host key verification failed' in error_text:
@@ -470,7 +484,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         Ensures repository is correctly configured and points to current
         remote.
         '''
-        if self.is_repo_link():
+        if self.is_repo_link:
             return self.linked_subproject.configure_repo(validate)
 
         # Create origin remote if it does not exist
@@ -508,11 +522,11 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Ensures local tracking branch exists and is checkouted.
         '''
-        if self.is_repo_link():
+        if self.is_repo_link:
             return self.linked_subproject.configure_branch()
 
         # create branch if it does not exist
-        if not self.branch in self.git_repo.heads:
+        if self.branch not in self.git_repo.heads:
             self.git_repo.git.branch(
                 '--track',
                 self.branch,
@@ -526,7 +540,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Wrapper for doing repository update and pushing them to translations.
         '''
-        if self.is_repo_link():
+        if self.is_repo_link:
             return self.linked_subproject.do_update(request)
 
         # pull remote
@@ -558,7 +572,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Wrapper for pushing changes to remote repo.
         '''
-        if self.is_repo_link():
+        if self.is_repo_link:
             return self.linked_subproject.do_push(request)
 
         # Do we have push configured
@@ -602,12 +616,12 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                     'origin'
                 )
             return True
-        except Exception as e:
+        except Exception as error:
             weblate.logger.warning(
                 'failed push on repo %s',
                 self.__unicode__()
             )
-            msg = 'Error:\n%s' % str(e)
+            msg = 'Error:\n%s' % str(error)
             mail_admins(
                 'failed push on repo %s' % self.__unicode__(),
                 msg
@@ -624,7 +638,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Wrapper for reseting repo to same sources as remote.
         '''
-        if self.is_repo_link():
+        if self.is_repo_link:
             return self.linked_subproject.do_reset(request)
 
         # First check we're up to date
@@ -638,12 +652,12 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                     self.__unicode__()
                 )
                 self.git_repo.git.reset('--hard', 'origin/%s' % self.branch)
-            except Exception as e:
+            except Exception as error:
                 weblate.logger.warning(
                     'failed reset on repo %s',
                     self.__unicode__()
                 )
-                msg = 'Error:\n%s' % str(e)
+                msg = 'Error:\n%s' % str(error)
                 mail_admins(
                     'failed reset on repo %s' % self.__unicode__(),
                     msg
@@ -673,7 +687,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Checks whether there is any translation which needs commit.
         '''
-        if not from_link and self.is_repo_link():
+        if not from_link and self.is_repo_link:
             return self.linked_subproject.commit_pending(
                 request, True, skip_push=skip_push
             )
@@ -697,7 +711,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Updates current branch to match remote (if possible).
         '''
-        if self.is_repo_link():
+        if self.is_repo_link:
             return self.linked_subproject.update_branch(request)
 
         # Merge/rebase
@@ -718,10 +732,10 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                     self.__unicode__()
                 )
                 return True
-            except Exception as e:
+            except Exception as error:
                 # In case merge has failer recover
                 status = self.git_repo.git.status()
-                error = str(e)
+                error = str(error)
                 method('--abort')
 
         # Log error
@@ -813,7 +827,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Brings git repo in sync with current model.
         '''
-        if self.is_repo_link():
+        if self.is_repo_link:
             return
         self.configure_repo(validate)
         self.commit_pending(None)
@@ -854,6 +868,32 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                 _('Failed to parse translation base file: %s') % str(exc)
             )
 
+    def clean_lang_codes(self, matches):
+        '''
+        Validates that there are no double language codes found in the files.
+        '''
+        if len(matches) == 0:
+            raise ValidationError(_('The mask did not match any files!'))
+        langs = set()
+        translated_langs = set()
+        for match in matches:
+            code = self.get_lang_code(match)
+            lang = Language.objects.auto_get_or_create(code=code)
+            if code in langs:
+                raise ValidationError(_(
+                    'There are more files for single language, please '
+                    'adjust the mask and use subprojects for translating '
+                    'different resources.'
+                ))
+            if lang.code in translated_langs:
+                raise ValidationError(_(
+                    'Multiple translations were mapped to a single language '
+                    'code (%s). You should disable SIMPLIFY_LANGUAGES '
+                    'to prevent Weblate mapping similar languages to one.'
+                ) % lang.code)
+            langs.add(code)
+            translated_langs.add(lang.code)
+
     def clean_files(self, matches):
         '''
         Validates whether we can parse translation files.
@@ -872,8 +912,8 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                     ))
             except ValueError:
                 notrecognized.append(match)
-            except Exception as e:
-                errors.append('%s: %s' % (match, str(e)))
+            except Exception as error:
+                errors.append('%s: %s' % (match, str(error)))
         if len(notrecognized) > 0:
             msg = (
                 _('Format of %d matched files could not be recognized.') %
@@ -932,22 +972,13 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             raise ValidationError(_('Failed to update git: %s') % exc.status)
 
         # Push repo is not used with link
-        if self.is_repo_link():
+        if self.is_repo_link:
             self.clean_repo_link()
 
         matches = self.get_mask_matches()
-        if len(matches) == 0:
-            raise ValidationError(_('The mask did not match any files!'))
-        langs = set()
-        for match in matches:
-            code = self.get_lang_code(match)
-            if code in langs:
-                raise ValidationError(_(
-                    'There are more files for single language, please '
-                    'adjust the mask and use subprojects for translating '
-                    'different resources.'
-                ))
-            langs.add(code)
+
+        # Verify language codes
+        self.clean_lang_codes(matches)
 
         # Try parsing files
         self.clean_files(matches)
@@ -1062,7 +1093,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Checks whether there is something to merge from remote repository.
         '''
-        if self.is_repo_link():
+        if self.is_repo_link:
             return self.linked_subproject.git_needs_merge()
         return self.git_check_merge('..origin/%s' % self.branch)
 
@@ -1070,7 +1101,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Checks whether there is something to push to remote repository.
         '''
-        if self.is_repo_link():
+        if self.is_repo_link:
             return self.linked_subproject.git_needs_push()
         return self.git_check_merge('origin/%s..' % self.branch)
 

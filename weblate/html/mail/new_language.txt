@@ -6,4 +6,8 @@
 
 {{ language.name }} ({{ language.code }})
 
-{% endfilter%}{% endautoescape %}{% include "mail/footer.txt" %}
+{% trans "Requesting user:" %}
+
+{{ user.first_name }} <{{ user.email }}>
+
+{% endfilter%}{% endautoescape %}{% include "mail/signature.txt" %}

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -55,7 +55,7 @@ class GlosbeTranslation(MachineTranslation):
             **params
         )
 
-        if not 'tuc' in response:
+        if 'tuc' not in response:
             return []
 
         return [(match['phrase']['text'], 100, self.name, text)

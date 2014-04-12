@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -41,6 +41,9 @@ def is_running_git():
 # Weblate version
 VERSION = '1.9'
 
+# User-Agent string to use
+USER_AGENT = 'Weblate/{0}'.format(VERSION)
+
 # Are we running git
 RUNNING_GIT = is_running_git()
 GIT_RELEASE = False
@@ -51,7 +54,7 @@ if RUNNING_GIT:
     try:
         import git
         # Describe current checkout
-        GIT_VERSION = git.Repo(get_root_dir()).git.describe()
+        GIT_VERSION = git.Repo(get_root_dir()).git.describe(always=True)
 
         # Check if we're close to release tag
         parts = GIT_VERSION.split('-')
@@ -83,3 +86,8 @@ def get_doc_url(page, anchor=''):
         url += '#%s' % anchor
 
     return url
+
+# Check for requirements
+from weblate.trans.requirements import check_requirements
+
+check_requirements()

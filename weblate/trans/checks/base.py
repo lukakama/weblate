@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -31,19 +31,29 @@ class Check(object):
     description = ''
     target = False
     source = False
+    ignore_untranslated = True
 
     def __init__(self):
         id_dash = self.check_id.replace('_', '-')
         self.doc_id = 'check-%s' % id_dash
         self.ignore_string = 'ignore-%s' % id_dash
 
-    def check(self, sources, targets, unit):
+    def check_target(self, sources, targets, unit):
         '''
-        Checks single unit, handling plurals.
+        Checks target strings.
         '''
         # Is this check ignored
         if self.ignore_string in unit.all_flags:
             return False
+        # No checking of not translated units
+        if self.ignore_untranslated and not unit.translated:
+            return False
+        return self.check_target_unit(sources, targets, unit)
+
+    def check_target_unit(self, sources, targets, unit):
+        '''
+        Checks single unit, handling plurals.
+        '''
         # Check singular
         if self.check_single(sources[0], targets[0], unit, 0):
             return True
@@ -61,13 +71,13 @@ class Check(object):
         '''
         Check for single phrase, not dealing with plurals.
         '''
-        return False
+        raise NotImplementedError()
 
     def check_source(self, source, unit):
         '''
         Checks source string
         '''
-        return False
+        raise NotImplementedError()
 
     def check_chars(self, source, target, pos, chars):
         '''
@@ -76,7 +86,7 @@ class Check(object):
         try:
             src = source[pos]
             tgt = target[pos]
-        except:
+        except IndexError:
             return False
         return (
             (src in chars and tgt not in chars)
@@ -126,12 +136,36 @@ class TargetCheck(Check):
     '''
     target = True
 
+    def check_source(self, source, unit):
+        '''
+        We don't check source strings here.
+        '''
+        return False
+
+    def check_single(self, source, target, unit, cache_slot):
+        '''
+        Check for single phrase, not dealing with plurals.
+        '''
+        raise NotImplementedError()
+
 
 class SourceCheck(Check):
     '''
     Basic class for source checks.
     '''
     source = True
+
+    def check_single(self, source, target, unit, cache_slot):
+        '''
+        We don't check target strings here.
+        '''
+        return False
+
+    def check_source(self, source, unit):
+        '''
+        Checks source string
+        '''
+        raise NotImplementedError()
 
 
 class CountingCheck(TargetCheck):

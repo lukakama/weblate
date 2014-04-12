@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -24,8 +24,7 @@ Charting library for Weblate.
 from weblate.trans.models import Change
 from weblate.lang.models import Language
 from weblate.trans.views.helper import get_project_translation
-from django.shortcuts import render_to_response, get_object_or_404
-from django.template import RequestContext
+from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse
 from django.contrib.auth.models import User
 from cStringIO import StringIO
@@ -41,7 +40,6 @@ def render_activity(activity):
     # Preprocess data for chart
     maximum = max([l[1] for l in activity] + [1])
     step = 780.0 / len(activity)
-    width = step / 2
 
     # Prepare image
     image = Image.new('RGB', (800, 100), 'white')
@@ -74,7 +72,7 @@ def render_activity(activity):
             (
                 20 + current,
                 84,
-                20 + current + width,
+                20 + current + (step / 2),
                 84 - value[1] * 78.0 / maximum
             ),
             fill=(0, 67, 118)
@@ -276,10 +274,14 @@ def view_activity(request, project=None, subproject=None, lang=None):
             'yearly_activity',
         )
 
-    return render_to_response('js/activity.html', RequestContext(request, {
-        'yearly_url': yearly_url,
-        'monthly_url': monthly_url,
-    }))
+    return render(
+        request,
+        'js/activity.html',
+        {
+            'yearly_url': yearly_url,
+            'monthly_url': monthly_url,
+        }
+    )
 
 
 def view_language_activity(request, lang):
@@ -299,7 +301,11 @@ def view_language_activity(request, lang):
         kwargs={'lang': language.code},
     )
 
-    return render_to_response('js/activity.html', RequestContext(request, {
-        'yearly_url': yearly_url,
-        'monthly_url': monthly_url,
-    }))
+    return render(
+        request,
+        'js/activity.html',
+        {
+            'yearly_url': yearly_url,
+            'monthly_url': monthly_url,
+        }
+    )

@@ -51,6 +51,10 @@ you can use apt-get:
     apt-get install python-mysqldb   # For MySQL
     apt-get install python-psycopg2  # For PostgreSQL
 
+    # Dependencies for python-social-auth
+
+    apt-get install python-requests-oauthlib python-six python-openid
+
 
 There is one library not available in Debian so far, so it is recommended to
 install it using pip:
@@ -68,8 +72,8 @@ All requirements are available either directly in openSUSE or in
 
 .. code-block:: sh
 
-    zypper install python-django python-social-auth translate-toolkit python-GitPython \
-        python-whoosh python-imaging python-South
+    zypper install python-Django python-icu translate-toolkit python-GitPython \
+        python-Whoosh python-Pillow python-South python-python-social-auth
 
 
 Requirements on OSX
@@ -94,20 +98,20 @@ Most requirements can be also installed using pip installer:
 
     pip install -r requirements.txt
 
-Also you will need header files for ``libxml2`` and ``libxslt`` to compile some
-of the required Python modules.
+Also you will need header files for ``python-dev``, ``libxml2`` and ``libxslt``
+to compile some of the required Python modules.
 
 On Debian or Ubuntu you can install them using:
 
 .. code-block:: sh
 
-    apt-get install libxml2-dev libxslt-dev
+    apt-get install libxml2-dev libxslt-dev python-dev
 
 On openSUSE or SLES you can install them using:
 
 .. code-block:: sh
 
-    zypper install libxslt-devel libxml2-devel
+    zypper install libxslt-devel libxml2-devel python-devel
 
 .. _file-permissions:
 
@@ -143,7 +147,7 @@ options:
     List of site administrators to receive notifications when something goes
     wrong, for example notifications on failed merge or Django errors.
 
-    .. seealso:: https://docs.djangoproject.com/en/1.4/ref/settings/#admins
+    .. seealso:: https://docs.djangoproject.com/en/1.6/ref/settings/#admins
 
 ``ALLOWED_HOSTS``
 
@@ -169,7 +173,7 @@ options:
 
             CREATE DATABASE <dbname> CHARACTER SET utf8;
 
-    .. seealso:: https://docs.djangoproject.com/en/1.4/ref/settings/#databases, https://docs.djangoproject.com/en/1.4/ref/databases/
+    .. seealso:: https://docs.djangoproject.com/en/1.6/ref/settings/#databases, https://docs.djangoproject.com/en/1.4/ref/databases/
 
 ``DEBUG``
 
@@ -180,7 +184,7 @@ options:
     Debug mode also slows down Weblate as Django stores much more information
     internally in this case.
 
-    .. seealso:: https://docs.djangoproject.com/en/1.4/ref/settings/#debug
+    .. seealso:: https://docs.djangoproject.com/en/1.6/ref/settings/#debug
 
 ``DEFAULT_FROM_EMAIL``
 
@@ -300,7 +304,7 @@ environment), for example setup for MySQL:
         }
     }
 
-.. seealso:: :ref:`installation`, `Django's databases <https://docs.djangoproject.com/en/1.4/ref/databases/>`_
+.. seealso:: :ref:`installation`, `Django's databases <https://docs.djangoproject.com/en/1.6/ref/databases/>`_
 
 .. _production-cache:
 
@@ -319,7 +323,34 @@ variable, for example:
         }
     }
 
-.. seealso:: `Django’s cache framework <https://docs.djangoproject.com/en/1.4/topics/cache/>`_
+.. seealso:: :ref:`production-cache-avatar`, `Django’s cache framework <https://docs.djangoproject.com/en/1.6/topics/cache/>`_
+
+.. _production-cache-avatar:
+
+Avatar caching
+++++++++++++++
+
+In addition to caching of Django, Weblate performs caching of avatars. It is
+recommended to use separate, file backed cache for this purpose:
+
+.. code-block:: python
+
+    CACHES = {
+        'default': {
+            # Default caching backend setup, see above
+            'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
+            'LOCATION': '127.0.0.1:11211',
+        },
+        'avatar': {
+            'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+            'LOCATION': os.path.join(WEB_ROOT, 'avatar-cache'),
+            'TIMEOUT': 604800,
+            'OPTIONS': {
+                'MAX_ENTRIES': 1000,
+            },
+        }
+
+.. seealso:: :setting:`ENABLE_AVATARS`, :ref:`production-cache`, `Django’s cache framework <https://docs.djangoproject.com/en/1.6/topics/cache/>`_
 
 .. _production-email:
 
@@ -340,8 +371,8 @@ have correct sender address, please configure ``SERVER_EMAIL`` and
     `DEFAULT_FROM_EMAIL documentation`_,
     `SERVER_EMAIL documentation`_
 
-.. _DEFAULT_FROM_EMAIL documentation: https://docs.djangoproject.com/en/1.4/ref/settings/#default-from-email
-.. _SERVER_EMAIL documentation: https://docs.djangoproject.com/en/1.4/ref/settings/#server-email
+.. _DEFAULT_FROM_EMAIL documentation: https://docs.djangoproject.com/en/1.6/ref/settings/#default-from-email
+.. _SERVER_EMAIL documentation: https://docs.djangoproject.com/en/1.6/ref/settings/#server-email
 
 
 .. _production-hosts:
@@ -440,7 +471,7 @@ use that for following paths:
 Additionally you should setup rewrite rule to serve :file:`media/favicon.ico`
 as :file:`favicon.ico`.
 
-.. seealso:: https://docs.djangoproject.com/en/1.4/howto/deployment/
+.. seealso:: https://docs.djangoproject.com/en/1.6/howto/deployment/
 
 Sample configuration for Lighttpd
 +++++++++++++++++++++++++++++++++
@@ -495,8 +526,8 @@ Additionally you will have to adjust :file:`weblate/settings.py`:
 
 .. _appliance:
 
-Appliance
----------
+SUSE Studio appliance
+---------------------
 
 Weblate appliance provides preconfigured Weblate running with MySQL database as
 backend and Apache as web server. It is provided in many formats suitable for

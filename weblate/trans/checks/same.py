@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -28,6 +28,7 @@ import re
 
 # We ignore some words which are usually not translated
 SAME_BLACKLIST = frozenset((
+    'abc',
     'accelerator',
     'account',
     'action',
@@ -54,17 +55,24 @@ SAME_BLACKLIST = frozenset((
     'attribution',
     'atom',
     'audio',
+    'author',
     'auto',
+    'autostart',
+    'authentication',
     'avatar',
     'backend',
+    'backspace',
     'balance',
+    'baltic',
     'battery',
     'bb',
     'begin',
     'bios',
     'bit',
     'bitcoin',
+    'bitcoins',
     'bitmap',
+    'bitmaps',
     'block',
     'blog',
     'bluetooth',
@@ -77,9 +85,13 @@ SAME_BLACKLIST = frozenset((
     'bzip',
     'bzip2',
     'cache',
+    'caps',
     'cardinality',
+    'charset',
+    'charsets',
     'chat',
     'click',
+    'clipboard',
     'club',
     'cm',
     'code',
@@ -97,8 +109,6 @@ SAME_BLACKLIST = frozenset((
     'csd',
     'csv',
     'ctrl',
-    'ctrl+d',
-    'ctrl+z',
     'cvs',
     'cyrillic',
     'data',
@@ -107,6 +117,7 @@ SAME_BLACKLIST = frozenset((
     'dbm',
     'debian',
     'debug',
+    'default',
     'definition',
     'del',
     'delete',
@@ -117,6 +128,7 @@ SAME_BLACKLIST = frozenset((
     'detail',
     'details',
     'ding',
+    'direction',
     'distribution',
     'distro',
     'dm',
@@ -139,8 +151,11 @@ SAME_BLACKLIST = frozenset((
     'email',
     'engine',
     'engines',
+    'enter',
     'enterprise',
+    'enum',
     'error',
+    'escape',
     'eu',
     'exchange',
     'expert',
@@ -153,6 +168,8 @@ SAME_BLACKLIST = frozenset((
     'fedora',
     'feeds',
     'feet',
+    'file',
+    'files',
     'filter',
     'filters',
     'finance',
@@ -165,6 +182,7 @@ SAME_BLACKLIST = frozenset((
     'freemind',
     'freeplane',
     'ft',
+    'full',
     'fulltext',
     'function',
     'gammu',
@@ -182,6 +200,7 @@ SAME_BLACKLIST = frozenset((
     'gpx',
     'graphic',
     'graphics',
+    'grant',
     'gtk',
     'gzip',
     'hack',
@@ -193,6 +212,7 @@ SAME_BLACKLIST = frozenset((
     'headset',
     'help',
     'hmpf',
+    'home',
     'homepage',
     'hook',
     'horizontal',
@@ -256,11 +276,6 @@ SAME_BLACKLIST = frozenset((
     'layout',
     'ldif',
     'level',
-    'login',
-    'logo',
-    'logos',
-    'longitude',
-    'lord',
     'libgammu',
     'linestring',
     'link',
@@ -269,8 +284,14 @@ SAME_BLACKLIST = frozenset((
     'list',
     'lithium',
     'lithium',
+    'lock',
     'local',
     'locales',
+    'login',
+    'logo',
+    'logos',
+    'longitude',
+    'lord',
     'ltr',
     'ma',
     'mah',
@@ -279,37 +300,46 @@ SAME_BLACKLIST = frozenset((
     'mailbox',
     'mailboxes',
     'maildir',
+    'mailing',
     'markdown',
     'master',
     'max',
     'maximum',
     'media',
     'mediawiki',
+    'menu',
     'merge',
     'message',
     'messages',
     'meta',
     'metal',
-    'microsoft',
-    'minute',
-    'model',
-    'module',
-    'modules',
-    'monitor',
-    'motif',
     'mi',
     'mib',
+    'micropayment',
+    'micropayments',
+    'microsoft',
     'mile',
     'min',
     'minimum',
     'mint',
     'minus',
+    'minute',
+    'minutes',
     'mm',
+    'model',
+    'module',
+    'modules',
+    'monitor',
+    'motif',
+    'mouse',
+    'mph',
     'multiplayer',
     'musicbottle',
     'mv',
     'n/a',
     'name',
+    'namecoin',
+    'namecoins',
     'navigation',
     'neutral',
     'nimh',
@@ -321,8 +351,11 @@ SAME_BLACKLIST = frozenset((
     'notify',
     'nt',
     'null',
+    'num',
+    'numeric',
     'obex',
     'office',
+    'offline',
     'ok',
     'online',
     'opac',
@@ -343,7 +376,9 @@ SAME_BLACKLIST = frozenset((
     'output',
     'overhead',
     'package',
+    'page',
     'pager',
+    'pages',
     'parameter',
     'parameters',
     'partition',
@@ -361,6 +396,8 @@ SAME_BLACKLIST = frozenset((
     'phpmyadmin',
     'pib',
     'pirate',
+    'pirates',
+    'placement',
     'plan',
     'playlist',
     'plugin',
@@ -375,6 +412,7 @@ SAME_BLACKLIST = frozenset((
     'pool',
     'port',
     'portable',
+    'portrait',
     'position',
     'pre',
     'pre-commit',
@@ -388,6 +426,7 @@ SAME_BLACKLIST = frozenset((
     'promotion',
     'property',
     'properties',
+    'provider',
     'proxy',
     'pt',
     'pull',
@@ -402,13 +441,22 @@ SAME_BLACKLIST = frozenset((
     'rebase',
     'redhat',
     'regexp',
+    'region',
+    'relation',
+    'relations',
     'replication',
     'repository',
+    'report',
+    'reports',
     'reset',
     'resource',
+    'restaurant',
+    'restaurants',
+    'return',
     'rich-text',
     'richtext',
     'roadmap',
+    'route',
     'routine',
     'routines',
     'rss',
@@ -424,13 +472,18 @@ SAME_BLACKLIST = frozenset((
     'script',
     'scripts',
     'scripting',
+    'scroll',
+    'seed',
+    'send',
     'sergeant',
     'serie',
     'series',
     'server',
     'servers',
     'service',
+    'set',
     'shell',
+    'shift',
     'sim',
     'singular',
     'slot',
@@ -439,6 +492,9 @@ SAME_BLACKLIST = frozenset((
     'sms',
     'smsc',
     'smsd',
+    'snapshot',
+    'snapshots',
+    'socket',
     'software',
     'solaris',
     'source',
@@ -454,6 +510,7 @@ SAME_BLACKLIST = frozenset((
     'strings',
     'structure',
     'style',
+    'submit',
     'subproject',
     'subquery',
     'substring',
@@ -468,15 +525,20 @@ SAME_BLACKLIST = frozenset((
     'syndication',
     'system',
     'swap',
+    'tab',
     'table',
     'tables',
+    'tabs',
     'tada',
+    'tag',
+    'tags',
     'tbx',
     'tent',
     'termbase',
     'test',
     'texy',
     'text',
+    'theme',
     'thread',
     'threads',
     'tib',
@@ -484,6 +546,7 @@ SAME_BLACKLIST = frozenset((
     'todo',
     'todos',
     'total',
+    'tray',
     'trigger',
     'triggers',
     'ts',
@@ -496,6 +559,7 @@ SAME_BLACKLIST = frozenset((
     'ukolovnik',
     'unicode',
     'unique',
+    'unit',
     'update',
     'upload',
     'url',
@@ -520,6 +584,7 @@ SAME_BLACKLIST = frozenset((
     'widget',
     'widgets',
     'wiki',
+    'wikipedia',
     'wildcard',
     'windowed',
     'windows',
@@ -653,8 +718,10 @@ SAME_BLACKLIST = frozenset((
     'khmer',
     'kirghiz',
     'klingon',
+    'ko',
     'korean',
     'kurdish',
+    'kyrgyz',
     'lao',
     'latvian',
     'limburgish',
@@ -662,6 +729,8 @@ SAME_BLACKLIST = frozenset((
     'lithuanian',
     'luxembourgish',
     'macedonian',
+    'mail',
+    'mailing',
     'maithili',
     'malagasy',
     'malay',
@@ -759,11 +828,74 @@ DOMAIN_RE = re.compile(
     re.IGNORECASE
 )
 
-PATH_RE = re.compile(r'(/[a-zA-Z0-9=:?._-]+)+')
+PATH_RE = re.compile(r'(^|[ ])(/[a-zA-Z0-9=:?._-]+)+')
 
-TEMPLATE_RE = re.compile(r'{[a-z_-]+}')
+TEMPLATE_RE = re.compile(r'{[a-z_-]+}|@[A-Z_]@')
 
 RST_MATCH = re.compile(r'(?::ref:`[^`]+`|``[^`]+``)')
+
+SPLIT_RE = re.compile(
+    ur'(?:\&(?:nbsp|rsaquo|lt|gt|amp|ldquo|rdquo|times|quot);|' +
+    ur'[() ,.^`"\'\\/_<>!?;:|{}*^@%#&~=+\r\n✓—…\[\]0-9-])+'
+)
+
+
+def strip_format(msg, flags):
+    '''
+    Checks whether given string contains only format strings
+    and possible punctation. These are quite often not changed
+    by translators.
+    '''
+    if 'python-format' in flags:
+        regex = PYTHON_PRINTF_MATCH
+    elif 'python-brace-format' in flags:
+        regex = PYTHON_BRACE_MATCH
+    elif 'php-format' in flags:
+        regex = PHP_PRINTF_MATCH
+    elif 'c-format' in flags:
+        regex = C_PRINTF_MATCH
+    elif 'rst-text' in flags:
+        regex = RST_MATCH
+    else:
+        return msg
+    stripped = regex.sub('', msg)
+    return stripped
+
+
+def strip_string(msg, flags):
+    '''
+    Strips (usually) not translated parts from the string.
+    '''
+    # Strip format strings
+    stripped = strip_format(msg, flags)
+
+    # Remove email addresses
+    stripped = EMAIL_RE.sub('', stripped)
+
+    # Strip full URLs
+    stripped = URL_RE.sub('', stripped)
+
+    # Strip hash tags / IRC channels
+    stripped = HASH_RE.sub('', stripped)
+
+    # Strip domain names/URLs
+    stripped = DOMAIN_RE.sub('', stripped)
+
+    # Strip file/URL paths
+    stripped = PATH_RE.sub('', stripped)
+
+    # Strip template markup
+    stripped = TEMPLATE_RE.sub('', stripped)
+
+    # Cleanup trailing/leading chars
+    return stripped
+
+
+def test_word(word):
+    '''
+    Test whether word should be ignored.
+    '''
+    return len(word) <= 1 or word in SAME_BLACKLIST
 
 
 class SameCheck(TargetCheck):
@@ -773,104 +905,6 @@ class SameCheck(TargetCheck):
     check_id = 'same'
     name = _('Not translated')
     description = _('Source and translated strings are same')
-
-    def strip_format(self, msg, flags):
-        '''
-        Checks whether given string contains only format strings
-        and possible punctation. These are quite often not changed
-        by translators.
-        '''
-        if 'python-format' in flags:
-            regex = PYTHON_PRINTF_MATCH
-        elif 'python-brace-format' in flags:
-            regex = PYTHON_BRACE_MATCH
-        elif 'php-format' in flags:
-            regex = PHP_PRINTF_MATCH
-        elif 'c-format' in flags:
-            regex = C_PRINTF_MATCH
-        elif 'rst-text' in flags:
-            regex = RST_MATCH
-        else:
-            return msg
-        stripped = regex.sub('', msg)
-        return stripped
-
-    def strip_string(self, msg, flags):
-        '''
-        Strips (usually) not translated parts from the string.
-        '''
-        # Strip format strings
-        stripped = self.strip_format(msg, flags)
-
-        # Remove email addresses
-        stripped = EMAIL_RE.sub('', stripped)
-
-        # Strip full URLs
-        stripped = URL_RE.sub('', stripped)
-
-        # Strip hash tags / IRC channels
-        stripped = HASH_RE.sub('', stripped)
-
-        # Strip domain names/URLs
-        stripped = DOMAIN_RE.sub('', stripped)
-
-        # Strip file/URL paths
-        stripped = PATH_RE.sub('', stripped)
-
-        # Strip template markup
-        stripped = TEMPLATE_RE.sub('', stripped)
-
-        # Remove some html entities
-        stripped = stripped.replace(
-            '&nbsp;', ' '
-        ).replace(
-            '&rsaquo;', '"'
-        ).replace(
-            '&lt;', '<'
-        ).replace(
-            '&gt;', '>'
-        ).replace(
-            '&amp;', '&'
-        ).replace(
-            '&ldquo;', '"'
-        ).replace(
-            '&rdquo;', '"'
-        ).replace(
-            '&times;', '.'
-        ).replace(
-            '&quot;', '"'
-        )
-
-        # Cleanup trailing/leading chars
-        stripped = self.strip_chars(stripped)
-
-        # Replace punctation by whitespace for splitting
-        stripped = stripped.replace(
-            '_', ' '
-        ).replace(
-            ',', ' '
-        ).replace(
-            '\\', ' '
-        ).replace(
-            '/', ' '
-        )
-
-        return stripped
-
-    def strip_chars(self, word):
-        '''
-        Strip chars not useful for translating.
-        '''
-        return word.strip(
-            u' ,./<>?;\'\\:"|[]{}`~!@#$%^&*()-=_+0123456789\n\r✓—'
-        )
-
-    def test_word(self, word):
-        '''
-        Test whether word should be ignored.
-        '''
-        stripped = self.strip_chars(word)
-        return len(stripped) <= 1 or stripped in SAME_BLACKLIST
 
     def should_ignore(self, source, unit, cache_slot):
         '''
@@ -891,7 +925,7 @@ class SameCheck(TargetCheck):
             result = True
         else:
             # Strip format strings
-            stripped = self.strip_string(lower_source, unit.all_flags)
+            stripped = strip_string(lower_source, unit.all_flags)
 
             # Ignore strings which don't contain any string to translate
             # or just single letter (usually unit or something like that)
@@ -900,9 +934,10 @@ class SameCheck(TargetCheck):
             else:
                 # Check if we have any word which is not in blacklist
                 # (words which are often same in foreign language)
-                result = min(
-                    (self.test_word(word) for word in stripped.split())
-                )
+                for word in SPLIT_RE.split(stripped):
+                    if not test_word(word):
+                        return False
+                return True
 
         # Store in cache
         self.set_cache(unit, result, cache_slot)
@@ -911,7 +946,7 @@ class SameCheck(TargetCheck):
 
     def check_single(self, source, target, unit, cache_slot):
         # English variants will have most things not translated
-        if self.is_language(unit, ['en']):
+        if self.is_language(unit, ('en', )):
             return False
 
         # One letter things are usually labels or decimal/thousand separators

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -90,7 +90,7 @@ class EndSpaceCheck(TargetCheck):
             return False
         if not source or not target:
             return False
-        if self.is_language(unit, ['fr', 'br']):
+        if self.is_language(unit, ('fr', 'br')):
             if source[-1] in [':', '!', '?'] and target[-1] == ' ':
                 return False
 
@@ -135,14 +135,15 @@ class EndStopCheck(TargetCheck):
             return self.check_chars(
                 source, target, -1, (u';', u':', u'：', u'.', u'。')
             )
-        if self.is_language(unit, ['hi', 'bn']):
+        if self.is_language(unit, ('hi', 'bn')):
             # Using | instead of । is not typographically correct, but
             # seems to be quite usual
             return self.check_chars(
                 source, target, -1, (u'.', u'।', u'|')
             )
         return self.check_chars(
-            source, target, -1, (u'.', u'。', u'।', u'۔', u'։', u'·', u'෴')
+            source, target, -1,
+            (u'.', u'。', u'।', u'۔', u'։', u'·', u'෴', u'។')
         )
 
 
@@ -191,7 +192,7 @@ class EndColonCheck(TargetCheck):
                     (u';', u':', u'：', u'.', u'。')
                 )
             return False
-        return self.check_chars(source, target, -1, (u':', u'：'))
+        return self.check_chars(source, target, -1, (u':', u'：', u'៖'))
 
 
 class EndQuestionCheck(TargetCheck):
@@ -263,6 +264,8 @@ class EndExclamationCheck(TargetCheck):
                 if target[-2:] not in self.exclamation_fr:
                     return True
             return False
+        if source.endswith('Texy!') or target.endswith('Texy!'):
+            return False
         return self.check_chars(
             source,
             target,
@@ -307,4 +310,6 @@ class ZeroWidthSpaceCheck(TargetCheck):
     description = _('Translation contains extra zero-width space character')
 
     def check_single(self, source, target, unit, cache_slot):
+        if self.is_language(unit, ('km', )):
+            return False
         return (u'\u200b' in target) != (u'\u200b' in source)

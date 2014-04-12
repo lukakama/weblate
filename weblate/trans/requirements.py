@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -39,6 +39,22 @@ def get_version_module(module, name, url, optional=False):
         raise Exception(
             'Failed to import %s, please install %s from %s' % (
                 module,
+                name,
+                url,
+            )
+        )
+    return mod
+
+
+def get_translate_module(name, url):
+    '''
+    Returns module object for translate toolkit.
+    '''
+    try:
+        mod = importlib.import_module('translate.__version__')
+    except ImportError:
+        raise Exception(
+            'Failed to import translate-toolkit, please install %s from %s' % (
                 name,
                 url,
             )
@@ -112,11 +128,11 @@ def get_versions():
 
     name = 'Translate Toolkit'
     url = 'http://toolkit.translatehouse.org/'
-    mod = get_version_module('translate', name, url)
+    mod = get_translate_module(name, url)
     result.append((
         name,
         url,
-        mod.__version__.sver,
+        mod.sver,
         '1.9.0',
     ))
 
@@ -138,6 +154,16 @@ def get_versions():
         url,
         mod.__version__,
         '0.3.2',
+    ))
+
+    name = 'gitdb'
+    url = 'https://github.com/gitpython-developers/gitdb'
+    mod = get_version_module('gitdb', name, url)
+    result.append((
+        name,
+        url,
+        mod.__version__,
+        '0.5.4',
     ))
 
     name = 'Git'
@@ -215,3 +241,20 @@ def get_versions_string():
             )
         )
     return '\n'.join(result)
+
+
+def check_requirements():
+    '''
+    Performs check on requirements and raises an exception on error.
+    '''
+    versions = get_versions()
+    failure = False
+
+    for version in versions:
+        failure |= check_version(*version)
+
+    if failure:
+        raise Exception(
+            'Some of required modules are missing or too old! '
+            'Check above output for details.'
+        )

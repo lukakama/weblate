@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -26,7 +26,7 @@ from weblate.trans.checks import CHECKS
 from weblate.trans.models.unit import Unit
 from weblate.trans.models.project import Project
 from weblate.trans.models.changes import Change
-from weblate.trans.util import get_user_display
+from weblate.accounts.avatar import get_user_display
 
 
 class RelatedUnitMixin(object):
@@ -61,7 +61,7 @@ class SuggestionManager(models.Manager):
             user = request.user
 
         # Create the suggestion
-        suggestion = Suggestion.objects.create(
+        suggestion = self.create(
             target=target,
             contentsum=unit.contentsum,
             language=unit.translation.language,
@@ -121,6 +121,12 @@ class Suggestion(models.Model, RelatedUnitMixin):
             ('vote_suggestion', 'Can vote for suggestion'),
         )
         app_label = 'trans'
+
+    def __unicode__(self):
+        return u'suggestion for {0} by {1}'.format(
+            self.contentsum,
+            self.user.username if self.user else 'unknown',
+        )
 
     def accept(self, translation, request):
         allunits = translation.unit_set.filter(
@@ -202,6 +208,17 @@ class Vote(models.Model):
         unique_together = ('suggestion', 'user')
         app_label = 'trans'
 
+    def __unicode__(self):
+        if self.positive:
+            vote = '+1'
+        else:
+            vote = '-1'
+        return u'{0} for {1} by {2}'.format(
+            vote,
+            self.suggestion,
+            self.user.username,
+        )
+
 
 class CommentManager(models.Manager):
     def add(self, unit, user, lang, text):
@@ -210,7 +227,7 @@ class CommentManager(models.Manager):
         '''
         from weblate.accounts.models import notify_new_comment
 
-        new_comment = Comment.objects.create(
+        new_comment = self.create(
             user=user,
             contentsum=unit.contentsum,
             project=unit.translation.subproject.project,
@@ -258,6 +275,12 @@ class Comment(models.Model, RelatedUnitMixin):
         ordering = ['timestamp']
         app_label = 'trans'
 
+    def __unicode__(self):
+        return u'comment for {0} by {1}'.format(
+            self.contentsum,
+            self.user.username if self.user else 'unknown',
+        )
+
     def get_user_display(self):
         return get_user_display(self.user, link=True)
 
@@ -285,7 +308,7 @@ class Check(models.Model, RelatedUnitMixin):
         unique_together = ('contentsum', 'project', 'language', 'check')
 
     def __unicode__(self):
-        return '%s/%s: %s' % (
+        return u'{0}/{1}: {2}'.format(
             self.project,
             self.language,
             self.check,
@@ -294,13 +317,13 @@ class Check(models.Model, RelatedUnitMixin):
     def get_description(self):
         try:
             return CHECKS[self.check].description
-        except:
+        except KeyError:
             return self.check
 
     def get_doc_url(self):
         try:
             return CHECKS[self.check].get_doc_url()
-        except:
+        except KeyError:
             return ''
 
     def set_ignore(self):
@@ -321,3 +344,6 @@ class IndexUpdate(models.Model):
 
     class Meta:
         app_label = 'trans'
+
+    def __unicode__(self):
+        return self.unit.__unicode__()

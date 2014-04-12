@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -107,7 +107,7 @@ class UnitManager(models.Manager):
             checks = checks.filter(language=translation.language)
 
         # Filter by check type
-        if not rqtype in ['allchecks', 'sourcechecks']:
+        if rqtype not in ('allchecks', 'sourcechecks'):
             checks = checks.filter(check=rqtype)
 
         checks = checks.values_list('contentsum', flat=True)
@@ -333,6 +333,8 @@ class Unit(models.Model):
         '''
         super(Unit, self).__init__(*args, **kwargs)
         self._all_flags = None
+        self.old_translated = self.translated
+        self.old_fuzzy = self.fuzzy
 
     def has_acl(self, user):
         '''
@@ -362,6 +364,10 @@ class Unit(models.Model):
         '''
         Updates Unit from ttkit unit.
         '''
+        # Store current values for use in Translation.check_sync
+        self.old_fuzzy = self.fuzzy
+        self.old_translated = self.translated
+
         # Get unit attributes
         location = unit.get_locations()
         flags = unit.get_flags()
@@ -546,7 +552,9 @@ class Unit(models.Model):
         # Return if there was no change
         # We have to explicitly check for fuzzy flag change on monolingual
         # files, where we handle it ourselves without storing to backend
-        if not saved and oldunit.fuzzy == self.fuzzy:
+        if (not saved
+                and oldunit.fuzzy == self.fuzzy
+                and oldunit.target == self.target):
             # Propagate if we should
             if propagate:
                 self.propagate(request, change_action)
@@ -638,7 +646,7 @@ class Unit(models.Model):
         git backend (eg. commit or by parsing file).
         '''
         # Warn if request is not coming from backend
-        if not 'backend' in kwargs:
+        if 'backend' not in kwargs:
             weblate.logger.error(
                 'Unit.save called without backend sync: %s',
                 ''.join(traceback.format_stack())
@@ -661,7 +669,7 @@ class Unit(models.Model):
 
         # Update checks if content or fuzzy flag has changed
         if not same_content or not same_state:
-            self.check(same_state, force_insert)
+            self.check(same_state, same_content, force_insert)
 
         # Update fulltext index if content has changed or this is a new unit
         if force_insert or not same_content:
@@ -806,7 +814,7 @@ class Unit(models.Model):
         checks_to_run = CHECKS
         cleanup_checks = True
 
-        if (same_state or is_new) and not self.translated:
+        if (not same_state or is_new) and not self.translated:
             # Check whether there is any message with same source
             project = self.translation.subproject.project
             same_source = Unit.objects.filter(
@@ -819,26 +827,29 @@ class Unit(models.Model):
                 translation__subproject__allow_translation_propagation=False,
             )
 
+            # We run only checks which span across more units
+            checks_to_run = {}
+
             # Delete all checks if only message with this source is fuzzy
             if not same_source.exists():
                 checks = self.checks()
                 if checks.exists():
                     checks.delete()
                     self.update_has_failing_check(True)
-                return ({}, False)
-
-            # We run only checks which span across more units
-            checks_to_run = {}
-
-            # Consistency check checks across more translations
-            if 'inconsistent' in CHECKS:
+            elif 'inconsistent' in CHECKS:
+                # Consistency check checks across more translations
                 checks_to_run['inconsistent'] = CHECKS['inconsistent']
+
+            # Run source checks as well
+            for check in CHECKS:
+                if CHECKS[check].source:
+                    checks_to_run[CHECKS[check].check_id] = CHECKS[check]
 
             cleanup_checks = False
 
         return (checks_to_run, cleanup_checks)
 
-    def check(self, same_state=True, is_new=False):
+    def check(self, same_state=True, same_content=True, is_new=False):
         '''
         Updates checks for this unit.
         '''
@@ -853,20 +864,20 @@ class Unit(models.Model):
         if len(checks_to_run) == 0:
             return
 
-        checks = self.checks()
-
         src = self.get_source_plurals()
         tgt = self.get_target_plurals()
-        old_target_checks = set(checks.values_list('check', flat=True))
-        old_source_checks = set(self.source_checks().values_list(
-            'check', flat=True
-        ))
+        old_target_checks = set(
+            self.checks().values_list('check', flat=True)
+        )
+        old_source_checks = set(
+            self.source_checks().values_list('check', flat=True)
+        )
 
         # Run all checks
         for check in checks_to_run:
             check_obj = CHECKS[check]
             # Target check
-            if check_obj.target and check_obj.check(src, tgt, self):
+            if check_obj.target and check_obj.check_target(src, tgt, self):
                 if check in old_target_checks:
                     # We already have this check
                     old_target_checks.remove(check)
@@ -903,14 +914,14 @@ class Unit(models.Model):
             )
 
         # Update failing checks flag
-        if was_change or is_new:
+        if was_change or is_new or not same_content:
             self.update_has_failing_check(was_change)
 
     def update_has_failing_check(self, recurse=False):
         '''
         Updates flag counting failing checks.
         '''
-        has_failing_check = not self.fuzzy and self.active_checks().exists()
+        has_failing_check = self.translated and self.active_checks().exists()
 
         # Change attribute if it has changed
         if has_failing_check != self.has_failing_check:

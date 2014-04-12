@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -18,6 +18,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+import os
+import binascii
+
 from django.db import models
 from django.dispatch import receiver
 from django.conf import settings
@@ -26,7 +29,6 @@ from django.db.models.signals import post_save
 from django.utils.translation import ugettext_lazy as _
 from django.contrib.auth.models import Group, User, Permission
 from django.db.models.signals import post_syncdb
-from django.contrib.sites.models import Site
 from django.utils import translation as django_translation
 from django.template.loader import render_to_string
 from django.core.mail import EmailMultiAlternatives
@@ -36,9 +38,8 @@ from social.apps.django_app.default.models import UserSocialAuth
 
 from weblate.lang.models import Language
 from weblate.trans.models import Project, Change
-from weblate.trans.util import (
-    get_user_display, get_site_url, get_distinct_translations
-)
+from weblate.trans.util import get_site_url, get_distinct_translations
+from weblate.accounts.avatar import get_user_display
 import weblate
 from weblate.appsettings import ANONYMOUS_USER_NAME
 
@@ -97,7 +98,9 @@ def notify_new_language(subproject, language, user):
         subproject,
         {
             'language': language,
-        }
+            'user': user,
+        },
+        user=user,
     )
 
 
@@ -156,7 +159,7 @@ def notify_new_comment(unit, comment, user, report_source_bugs):
         user
     )
     for subscription in subscriptions:
-        subscription.notify_new_comment(unit, comment)
+        subscription.notify_new_comment(unit, comment, user)
 
     # Notify upstream
     if comment.language is None and report_source_bugs != '':
@@ -205,9 +208,7 @@ def send_notification_email(language, email, notification,
         html_body_template = 'mail/{}.html'.format(notification)
 
         # Adjust context
-        site = Site.objects.get_current()
-        context['current_site'] = site.domain
-        context['site'] = site
+        context['current_site_url'] = get_site_url()
         if translation_obj is not None:
             context['translation'] = translation_obj
             context['translation_url'] = get_site_url(
@@ -262,6 +263,12 @@ class VerifiedEmail(models.Model):
     '''
     social = models.ForeignKey(UserSocialAuth)
     email = models.EmailField()
+
+    def __unicode__(self):
+        return u'{0} - {1}'.format(
+            self.social.user.username,
+            self.email
+        )
 
 
 class ProfileManager(models.Manager):
@@ -419,7 +426,7 @@ class Profile(models.Model):
             return None
 
     def notify_user(self, notification, translation_obj,
-                    context=None, headers=None):
+                    context=None, headers=None, user=None):
         '''
         Wrapper for sending notifications to user.
         '''
@@ -438,7 +445,8 @@ class Profile(models.Model):
             notification,
             translation_obj,
             context,
-            headers
+            headers,
+            user=user
         )
 
     def notify_any_translation(self, unit, oldunit):
@@ -467,7 +475,9 @@ class Profile(models.Model):
             subproject,
             {
                 'language': language,
-            }
+                'user': user,
+            },
+            user=user
         )
 
     def notify_new_string(self, translation):
@@ -504,7 +514,7 @@ class Profile(models.Model):
             }
         )
 
-    def notify_new_comment(self, unit, comment):
+    def notify_new_comment(self, unit, comment, user):
         '''
         Sends notification about new comment.
         '''
@@ -515,7 +525,8 @@ class Profile(models.Model):
                 'unit': unit,
                 'comment': comment,
                 'subproject': unit.translation.subproject,
-            }
+            },
+            user=user,
         )
 
     def notify_merge_failure(self, subproject, error, status):
@@ -532,11 +543,12 @@ class Profile(models.Model):
             }
         )
 
-    def get_full_name(self):
+    @property
+    def full_name(self):
         '''
         Returns user's full name.
         '''
-        return self.user.get_full_name()
+        return self.user.first_name
 
     def get_secondary_units(self, unit):
         '''
@@ -679,6 +691,32 @@ def move_users():
 
     for user in User.objects.all():
         user.groups.add(group)
+
+
+def remove_user(user):
+    '''
+    Removes user account.
+    '''
+    # Change username
+    user.username = 'deleted-{0}'.format(user.pk)
+    while User.objects.filter(username=user.username).exists():
+        user.username = 'deleted-{0}-{1}'.format(
+            user.pk,
+            binascii.b2a_hex(os.urandom(5))
+        )
+
+    # Remove user information
+    user.first_name = 'Deleted User'
+    user.last_name = ''
+    user.email = 'noreply@weblate.org'
+
+    # Disable the user
+    user.is_active = False
+    user.set_unusable_password()
+    user.save()
+
+    # Remove all social auth associations
+    user.social_auth.all().delete()
 
 
 @receiver(post_syncdb)

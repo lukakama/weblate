@@ -1,0 +1,7 @@
+test-warnings: yes
+strictness: veryhigh
+uses:
+  - django
+autodetect: yes
+ignore-paths:
+    - docs

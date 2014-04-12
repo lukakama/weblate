@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -28,7 +28,7 @@ from weblate.trans.feeds import (
     ProjectChangesFeed, ChangesFeed, LanguageChangesFeed
 )
 from weblate.trans.views.changes import ChangesView
-from weblate.sitemaps import sitemaps
+from weblate.sitemaps import SITEMAPS
 import weblate.accounts.urls
 
 # URL regexp for language code
@@ -49,9 +49,16 @@ PROJECT_LANG = PROJECT + LANGUAGE + '/'
 # URL regexp used as base for widgets
 WIDGET = r'(?P<project>[^/]+)-(?P<widget>[^/-]+)-(?P<color>[^/-]+)'
 
+# Widget extension match
+EXTENSION = r'(?P<extension>(png|svg))'
+
 admin.autodiscover()
 
+handler403 = 'weblate.trans.views.basic.denied'
+
 handler404 = 'weblate.trans.views.basic.not_found'
+
+handler500 = 'weblate.trans.views.basic.server_error'
 
 admin.site.index_template = 'admin/custom-index.html'
 
@@ -477,24 +484,24 @@ urlpatterns = patterns(
     # Compatibility URLs for Widgets
     url(
         r'^widgets/' + PROJECT + '(?P<widget>[^/]+)/(?P<color>[^/]+)/$',
-        'weblate.trans.views.widgets.render',
+        'weblate.trans.views.widgets.render_widget',
         name='widgets-compat-render-color',
     ),
     url(
         r'^widgets/' + PROJECT + '(?P<widget>[^/]+)/$',
-        'weblate.trans.views.widgets.render',
+        'weblate.trans.views.widgets.render_widget',
         name='widgets-compat-render',
     ),
 
     # Engagement widgets
     url(
-        r'^widgets/' + WIDGET + '-' + LANGUAGE + r'\.png$',
-        'weblate.trans.views.widgets.render',
+        r'^widgets/' + WIDGET + '-' + LANGUAGE + r'\.' + EXTENSION + r'$',
+        'weblate.trans.views.widgets.render_widget',
         name='widget-image-lang',
     ),
     url(
-        r'^widgets/' + WIDGET + r'\.png$',
-        'weblate.trans.views.widgets.render',
+        r'^widgets/' + WIDGET + r'\.' + EXTENSION + r'$',
+        'weblate.trans.views.widgets.render_widget',
         name='widget-image',
     ),
     url(
@@ -627,21 +634,28 @@ urlpatterns = patterns(
 
     # User pages
     url(
-        r'^user/(?P<user>[^/]+)/',
+        r'^user/(?P<user>[^/]+)/$',
         'weblate.accounts.views.user_page',
         name='user_page',
+    ),
+
+    # Avatars
+    url(
+        r'^user/(?P<user>[^/]+)/avatar/(?P<size>(32|128))/$',
+        'weblate.accounts.views.user_avatar',
+        name='user_avatar',
     ),
 
     # Sitemap
     url(
         r'^sitemap\.xml$',
         'django.contrib.sitemaps.views.index',
-        {'sitemaps': sitemaps}
+        {'sitemaps': SITEMAPS}
     ),
     url(
         r'^sitemap-(?P<section>.+)\.xml$',
         'django.contrib.sitemaps.views.sitemap',
-        {'sitemaps': sitemaps}
+        {'sitemaps': SITEMAPS}
     ),
 
     # Media files

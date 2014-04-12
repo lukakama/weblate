@@ -1,8 +1,9 @@
 # Weblate 
 
-[![build status](https://secure.travis-ci.org/nijel/weblate.png)](https://travis-ci.org/nijel/weblate)
+[![Build Status](https://travis-ci.org/nijel/weblate.svg)](https://travis-ci.org/nijel/weblate)
 [![Coverage Status](https://coveralls.io/repos/nijel/weblate/badge.png?branch=master)](https://coveralls.io/r/nijel/weblate?branch=master)
-[![Translation status](http://l10n.cihar.com/widgets/weblate-status-badge.png)](http://l10n.cihar.com/engage/weblate/?utm_source=widget)
+[![Translation status](http://l10n.cihar.com/widgets/weblate-shields-badge.png)](https://l10n.cihar.com/engage/weblate/?utm_source=widget)
+[![Code Health](https://landscape.io/github/nijel/weblate/master/landscape.png)](https://landscape.io/github/nijel/weblate/master)
 
 Weblate is a free web-based translation tool with tight Git integration. It
 features simple and clean user interface, propagation of translations across
@@ -42,7 +43,7 @@ Please report bugs to https://github.com/nijel/weblate/issues.
 
 ## License
 
-Copyright (C) 2012 - 2013 Michal Čihař michal@cihar.com
+Copyright (C) 2012 - 2014 Michal Čihař michal@cihar.com
 
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software

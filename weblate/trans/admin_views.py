@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -20,15 +20,14 @@
 
 from weblate.trans.models import SubProject
 from django.contrib.sites.models import Site
-from django.template import RequestContext
-from django.shortcuts import render_to_response
+from django.shortcuts import render
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils.translation import ugettext as _
 from django.contrib import messages
 from django.conf import settings
 from weblate import settings_example
 from weblate import appsettings
-from weblate.trans.util import HAS_LIBRAVATAR
+from weblate.accounts.avatar import HAS_LIBRAVATAR
 from weblate.accounts.forms import HAS_ICU
 import weblate
 import django
@@ -50,9 +49,13 @@ def report(request):
     '''
     Provides report about git status of all repos.
     '''
-    return render_to_response("admin/report.html", RequestContext(request, {
-        'subprojects': SubProject.objects.all()
-    }))
+    return render(
+        request,
+        "admin/report.html",
+        {
+            'subprojects': SubProject.objects.all()
+        }
+    )
 
 
 @staff_member_required
@@ -107,6 +110,12 @@ def performance(request):
         _('Django caching'),
         cache,
         'production-cache',
+    ))
+    # Avatar caching
+    checks.append((
+        _('Avatar caching'),
+        'avatar' in settings.CACHES,
+        'production-cache-avatar',
     ))
     # Check email setup
     default_mails = (
@@ -163,14 +172,12 @@ def performance(request):
         'production-admin-files',
         'order-cell',
     ))
-    return render_to_response(
+    return render(
+        request,
         "admin/performance.html",
-        RequestContext(
-            request,
-            {
-                'checks': checks,
-            }
-        )
+        {
+            'checks': checks,
+        }
     )
 
 
@@ -316,9 +323,13 @@ def ssh(request):
                     _('Failed to get host key: %s') % exc.output
                 )
 
-    return render_to_response("admin/ssh.html", RequestContext(request, {
-        'public_key': key,
-        'can_generate': can_generate,
-        'host_keys': get_host_keys(),
-        'ssh_docs': weblate.get_doc_url('admin/projects', 'private'),
-    }))
+    return render(
+        request,
+        "admin/ssh.html",
+        {
+            'public_key': key,
+            'can_generate': can_generate,
+            'host_keys': get_host_keys(),
+            'ssh_docs': weblate.get_doc_url('admin/projects', 'private'),
+        }
+    )

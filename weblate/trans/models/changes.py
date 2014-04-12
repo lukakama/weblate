@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -20,13 +20,13 @@
 
 from django.db import models
 from django.contrib.auth.models import User
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils.translation import ugettext as _, ugettext_lazy
 from django.utils import timezone
 from weblate.trans.models.unit import Unit
 from weblate.trans.models.translation import Translation
 from weblate.trans.models.dictionary import Dictionary
-from weblate.trans.util import get_user_display
+from weblate.accounts.avatar import get_user_display
 
 
 class ChangeManager(models.Manager):
@@ -128,6 +128,23 @@ class ChangeManager(models.Manager):
             'translation__subproject', 'translation__language',
             'translation__subproject__project',
         )
+
+    def last_changes(self, user):
+        '''
+        Prefilters Changes by ACL for users and fetches related fields
+        for last changes display.
+        '''
+        from weblate.trans.models import Project
+        result = self.prefetch()
+
+        acl_projects, filtered = Project.objects.get_acl_status(user)
+        if filtered:
+            result = result.filter(
+                Q(translation__subproject__project__in=acl_projects) |
+                Q(dictionary__project__in=acl_projects)
+            )
+
+        return result
 
 
 class Change(models.Model):

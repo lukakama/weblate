@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -30,18 +30,20 @@ from weblate.trans.tests.test_checks import CheckTestCase
 
 
 class BBCodeCheckTest(CheckTestCase):
+    check = BBCodeCheck()
+
     def setUp(self):
         super(BBCodeCheckTest, self).setUp()
-        self.check = BBCodeCheck()
         self.test_good_matching = ('[a]string[/a]', '[a]string[/a]', '')
         self.test_failure_1 = ('[a]string[/a]', '[b]string[/b]', '')
         self.test_failure_2 = ('[a]string[/a]', 'string', '')
 
 
 class XMLTagsCheckTest(CheckTestCase):
+    check = XMLTagsCheck()
+
     def setUp(self):
         super(XMLTagsCheckTest, self).setUp()
-        self.check = XMLTagsCheck()
         self.test_good_matching = ('<a>string</a>', '<a>string</a>', '')
         self.test_failure_1 = ('<a>string</a>', '<b>string</b>', '')
         self.test_failure_2 = ('<a>string</a>', 'string', '')

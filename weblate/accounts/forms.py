@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -33,46 +33,25 @@ import unicodedata
 import weblate
 
 try:
-    import icu
+    import icu  # pylint: disable=import-error
     HAS_ICU = True
 except ImportError:
     HAS_ICU = False
 
 
 def remove_accents(input_str):
-    '''
+    """
     Removes accents from a string.
-    '''
+    """
     nkfd_form = unicodedata.normalize('NFKD', unicode(input_str))
     only_ascii = nkfd_form.encode('ASCII', 'ignore')
     return only_ascii
 
 
-def sort_choices(choices):
-    '''
-    Sorts choices alphabetically.
-
-    Either using cmp or ICU.
-    '''
-    if not HAS_ICU:
-        return sorted(
-            choices,
-            key=lambda tup: remove_accents(tup[1])
-        )
-    else:
-        locale = icu.Locale(get_language())
-        collator = icu.Collator.createInstance(locale)
-        return sorted(
-            choices,
-            key=lambda tup: tup[1],
-            cmp=collator.compare
-        )
-
-
 class NoStripEmailField(forms.EmailField):
-    '''
+    """
     Email field which does no stripping.
-    '''
+    """
     def clean(self, value):
         value = self.to_python(value)
         # We call super-super method to skip default EmailField behavior
@@ -121,6 +100,26 @@ class SortedSelectMixin(object):
     '''
     Mixin for Select widgets to sort choices alphabetically.
     '''
+    def sort_choices(self, choices):
+        '''
+        Sorts choices alphabetically.
+
+        Either using cmp or ICU.
+        '''
+        if not HAS_ICU:
+            return sorted(
+                choices,
+                key=lambda tup: remove_accents(tup[1])
+            )
+        else:
+            locale = icu.Locale(get_language())
+            collator = icu.Collator.createInstance(locale)
+            return sorted(
+                choices,
+                key=lambda tup: tup[1],
+                cmp=collator.compare
+            )
+
     def render_options(self, choices, selected_choices):
         '''
         Renders sorted options.
@@ -130,7 +129,7 @@ class SortedSelectMixin(object):
         output = []
 
         # Actually sort values
-        all_choices = sort_choices(list(chain(self.choices, choices)))
+        all_choices = self.sort_choices(list(chain(self.choices, choices)))
 
         # Stolen from Select.render_options
         for option_value, option_label in all_choices:
@@ -231,7 +230,6 @@ class UserForm(forms.ModelForm):
         fields = (
             'username',
             'first_name',
-            'last_name',
             'email',
         )
 
@@ -246,9 +244,7 @@ class UserForm(forms.ModelForm):
         emails.add(self.instance.email)
 
         self.fields['first_name'].required = True
-        self.fields['last_name'].required = True
-        self.fields['first_name'].label = _('First name')
-        self.fields['last_name'].label = _('Last name')
+        self.fields['first_name'].label = _('Full name')
         self.fields['email'].choices = [(x, x) for x in emails]
         self.fields['username'].valid = self.instance.username
 
@@ -322,8 +318,7 @@ class RegistrationForm(EmailForm):
     error_css_class = "error"
 
     username = UsernameField()
-    first_name = forms.CharField(label=_('First name'))
-    last_name = forms.CharField(label=_('Last name'))
+    first_name = forms.CharField(label=_('Full name'))
     content = forms.CharField(required=False)
 
     def clean_content(self):
@@ -333,19 +328,6 @@ class RegistrationForm(EmailForm):
         if self.cleaned_data['content'] != '':
             raise forms.ValidationError('Invalid value')
         return ''
-
-    def clean(self):
-        '''
-        Check for valid names.
-        '''
-        first = self.cleaned_data.get('first_name')
-        last = self.cleaned_data.get('last_name')
-        if first == last:
-            raise forms.ValidationError(
-                _('First and last name should be different!')
-            )
-
-        return self.cleaned_data
 
 
 class CaptchaRegistrationForm(RegistrationForm):
@@ -436,17 +418,13 @@ class PasswordForm(forms.Form):
         field.
 
         """
-        try:
-            password1 = self.cleaned_data['password1']
-            password2 = self.cleaned_data['password2']
+        password1 = self.cleaned_data.get('password1', '')
+        password2 = self.cleaned_data.get('password2', '')
 
-            if password1 != password2:
-                raise forms.ValidationError(
-                    _('You must type the same password each time.')
-                )
-
-        except KeyError:
-            pass
+        if password1 != password2:
+            raise forms.ValidationError(
+                _('You must type the same password each time.')
+            )
 
         return self.cleaned_data
 

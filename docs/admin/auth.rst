@@ -45,7 +45,7 @@ http://psa.matiasaguirre.net/docs/configuration/django.html
 Enabling individual backends is quite easy, it's just matter of adding entry to
 ``AUTHENTICATION_BACKENDS`` setting and possibly adding keys needed for given
 authentication. Please note that some backends do not provide user email by
-default, you have to request it explicitely, otherwise Weblate will not be able
+default, you have to request it explicitly, otherwise Weblate will not be able
 to properly credit users contributions.
 
 For example, enabling authentication against GitHub:
@@ -102,8 +102,7 @@ Once you have the package installed, you can hook it to Django authentication:
 
     # List of attributes to import from LDAP on login
     AUTH_LDAP_USER_ATTR_MAP = {
-        'first_name': 'givenName',
-        'last_name': 'sn',
+        'first_name': 'name',
         'email': 'mail',
     }
 
@@ -193,6 +192,7 @@ Per project access control
 ++++++++++++++++++++++++++
 
 .. versionadded:: 1.4
+
     This feature is available since Weblate 1.4.
 
 .. note::
@@ -209,4 +209,10 @@ project.
 To allow access to this project, you have to add the privilege to do so either
 directly to given user or group of users in Django admin interface.
 
-.. seealso:: https://docs.djangoproject.com/en/1.4/topics/auth/default/#auth-admin
+.. seealso:: https://docs.djangoproject.com/en/1.6/topics/auth/default/#auth-admin
+
+Managing users and groups
+-------------------------
+
+All users and groups can be managed using Django admin interface, which is
+available under :file:`/admin/` URL.

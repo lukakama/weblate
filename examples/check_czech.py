@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -21,7 +21,7 @@
 Quality check example for Czech plurals.
 '''
 
-from trans.checks import TargetCheck
+from weblate.trans.checks.base import TargetCheck
 from django.utils.translation import ugettext_lazy as _
 
 
@@ -37,7 +37,13 @@ class PluralCzechCheck(TargetCheck):
     description = _('Your translation is foo')
 
     # Real check code
-    def check(self, sources, targets, unit):
-        if self.is_language(unit, ['cs']):
+    def check_target_unit(self, sources, targets, unit):
+        if self.is_language(unit, ('cs', )):
             return targets[1] == targets[2]
+        return False
+
+    def check_single(self, source, target, unit, cache_slot):
+        '''
+        We don't check target strings here.
+        '''
         return False

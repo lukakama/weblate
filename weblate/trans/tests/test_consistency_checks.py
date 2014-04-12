@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -26,6 +26,7 @@ from django.test import TestCase
 from weblate.trans.checks.consistency import (
     PluralsCheck,
 )
+from weblate.trans.tests.test_checks import MockUnit
 
 
 class PluralsCheckTest(TestCase):
@@ -33,22 +34,22 @@ class PluralsCheckTest(TestCase):
         self.check = PluralsCheck()
 
     def test_none(self):
-        self.assertFalse(self.check.check(
+        self.assertFalse(self.check.check_target(
             ['string'],
             ['string'],
-            None
+            MockUnit('plural_none'),
         ))
 
     def test_empty(self):
-        self.assertFalse(self.check.check(
+        self.assertFalse(self.check.check_target(
             ['string', 'plural'],
             ['', ''],
-            None
+            MockUnit('plural_empty'),
         ))
 
     def test_partial_empty(self):
-        self.assertTrue(self.check.check(
+        self.assertTrue(self.check.check_target(
             ['string', 'plural'],
             ['string', ''],
-            None
+            MockUnit('plural_partial_empty'),
         ))

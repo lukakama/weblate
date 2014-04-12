@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2012 - 2013 Michal Čihař <michal@cihar.com>
+# Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -24,7 +24,6 @@ Helpers for quality checks tests.
 
 from django.test import TestCase
 import uuid
-from weblate.trans.checks.base import Check
 
 
 class MockLanguage(object):
@@ -72,18 +71,24 @@ class MockUnit(object):
         self.flags = flags
         self.translation = MockTranslation(code)
         self.source = source
+        self.fuzzy = False
+        self.translated = True
 
     @property
     def all_flags(self):
         return self.flags.split(',')
+
+    def get_source_plurals(self):
+        return [self.source]
 
 
 class CheckTestCase(TestCase):
     '''
     Generic test, also serves for testing base class.
     '''
+    check = None
+
     def setUp(self):
-        self.check = Check()
         self.test_empty = ('', '', '')
         self.test_good_matching = ('string', 'string', '')
         self.test_good_none = ('string', 'string', '')
@@ -91,13 +96,15 @@ class CheckTestCase(TestCase):
         self.test_failure_1 = None
         self.test_failure_2 = None
         self.test_failure_3 = None
-        self.test_ignore_check = ('x', 'x', self.check.ignore_string)
+        self.test_ignore_check = (
+            'x', 'x', self.check.ignore_string if self.check else ''
+        )
 
     def do_test(self, expected, data, lang='cs'):
         '''
         Performs single check if we have data to test.
         '''
-        if data is None:
+        if data is None or self.check is None:
             return
         result = self.check.check_single(
             data[0],
@@ -138,8 +145,10 @@ class CheckTestCase(TestCase):
         self.do_test(True, self.test_failure_3)
 
     def test_check_good_matching_singular(self):
+        if self.check is None:
+            return
         self.assertFalse(
-            self.check.check(
+            self.check.check_target(
                 [self.test_good_matching[0]],
                 [self.test_good_matching[1]],
                 MockUnit(None, self.test_good_matching[2])
@@ -147,8 +156,10 @@ class CheckTestCase(TestCase):
         )
 
     def test_check_good_matching_plural(self):
+        if self.check is None:
+            return
         self.assertFalse(
-            self.check.check(
+            self.check.check_target(
                 [self.test_good_matching[0]] * 2,
                 [self.test_good_matching[1]] * 3,
                 MockUnit(None, self.test_good_matching[2])
@@ -156,10 +167,10 @@ class CheckTestCase(TestCase):
         )
 
     def test_check_failure_1_singular(self):
-        if self.test_failure_1 is None:
+        if self.test_failure_1 is None or self.check is None:
             return
         self.assertTrue(
-            self.check.check(
+            self.check.check_target(
                 [self.test_failure_1[0]],
                 [self.test_failure_1[1]],
                 MockUnit(None, self.test_failure_1[2])
@@ -167,10 +178,10 @@ class CheckTestCase(TestCase):
         )
 
     def test_check_failure_1_plural(self):
-        if self.test_failure_1 is None:
+        if self.test_failure_1 is None or self.check is None:
             return
         self.assertTrue(
-            self.check.check(
+            self.check.check_target(
                 [self.test_failure_1[0]] * 2,
                 [self.test_failure_1[1]] * 3,
                 MockUnit(None, self.test_failure_1[2])
@@ -178,8 +189,10 @@ class CheckTestCase(TestCase):
         )
 
     def test_check_ignore_check(self):
+        if self.check is None:
+            return
         self.assertFalse(
-            self.check.check(
+            self.check.check_target(
                 [self.test_ignore_check[0]] * 2,
                 [self.test_ignore_check[1]] * 3,
                 MockUnit(None, self.test_ignore_check[2])
