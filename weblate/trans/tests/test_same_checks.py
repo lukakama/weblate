@@ -29,9 +29,10 @@ from weblate.trans.tests.test_checks import MockUnit, CheckTestCase
 
 
 class SameCheckTest(CheckTestCase):
+    check = SameCheck()
+
     def setUp(self):
         super(SameCheckTest, self).setUp()
-        self.check = SameCheck()
         self.test_good_none = ('%(source)s', '%(source)s', 'python-format')
         self.test_good_matching = ('source', 'translation', '')
         self.test_good_ignore = ('alarm', 'alarm', '')
@@ -125,6 +126,15 @@ class SameCheckTest(CheckTestCase):
             (
                 '%d bajt',
                 '%d bajt',
+                'php-format'
+            )
+        )
+
+        self.do_test(
+            False,
+            (
+                '%d table(s)',
+                '%d table(s)',
                 'php-format'
             )
         )
@@ -340,10 +350,26 @@ class SameCheckTest(CheckTestCase):
             )
         )
         self.do_test(
+            False,
+            (
+                '@NAME@: @BOO@',
+                '@NAME@: @BOO@',
+                ''
+            )
+        )
+        self.do_test(
             True,
             (
                 '{building}: some description',
                 '{building}: some description',
+                ''
+            )
+        )
+        self.do_test(
+            True,
+            (
+                '@NAME@: long text',
+                '@NAME@: long text',
                 ''
             )
         )

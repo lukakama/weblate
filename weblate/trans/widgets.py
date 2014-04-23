@@ -22,8 +22,10 @@ from django.conf import settings
 from django.utils.translation import ugettext as _
 from PIL import Image, ImageDraw
 from weblate.trans.fonts import is_base, get_font
+from weblate.appsettings import ENABLE_HTTPS
 from cStringIO import StringIO
 import os.path
+import urllib
 
 
 COLOR_DATA = {
@@ -67,6 +69,9 @@ class Widget(object):
     colors = ('grey', 'white', 'black')
     progress = None
     alpha = False
+    extension = 'png'
+    content_type = 'image/png'
+    order = 100
 
     def __init__(self, obj, color=None, lang=None):
         '''
@@ -248,6 +253,7 @@ class NormalWidget(Widget):
         'width': 180,
         'horizontal': True,
     }
+    order = 110
 
     def render_texts(self):
         self.render_text(
@@ -273,6 +279,7 @@ register_widget(NormalWidget)
 
 class SmallWidget(Widget):
     name = '88x31'
+    order = 120
 
     def render_texts(self):
         self.render_text(
@@ -296,6 +303,7 @@ class BadgeWidget(Widget):
     name = 'status'
     colors = ('badge', )
     alpha = True
+    order = 90
 
     def get_filename(self):
         if self.percent > 90:
@@ -325,3 +333,39 @@ class BadgeWidget(Widget):
         )
 
 register_widget(BadgeWidget)
+
+
+class ShieldsBadgeWidget(Widget):
+    name = 'shields'
+    colors = ('badge', )
+    extension = 'svg'
+    content_type = 'image/svg+xml'
+    order = 80
+
+    def redirect(self):
+        if ENABLE_HTTPS:
+            proto = 'https'
+        else:
+            proto = 'http'
+
+        if self.percent > 90:
+            color = 'brightgreen'
+        elif self.percent > 75:
+            color = 'yellow'
+        else:
+            color = 'red'
+
+        return '{0}://img.shields.io/badge/{1}-{2}-{3}.svg'.format(
+            proto,
+            urllib.quote(_('translated').encode('utf-8')),
+            '{0}%25'.format(int(self.percent)),
+            color
+        )
+
+    def render_texts(self):
+        '''
+        Text rendering method to be overridden.
+        '''
+        raise Exception('Not supported')
+
+register_widget(ShieldsBadgeWidget)

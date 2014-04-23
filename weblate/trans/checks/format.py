@@ -106,12 +106,12 @@ class BaseFormatCheck(TargetCheck):
     flag = None
     regexp = None
 
-    def check(self, sources, targets, unit):
+    def check_target_unit(self, sources, targets, unit):
         '''
         Checks single unit, handling plurals.
         '''
         # Verify unit is properly flagged
-        if not self.flag in unit.all_flags:
+        if self.flag not in unit.all_flags:
             return False
 
         # Special case languages with single plural form
@@ -204,7 +204,13 @@ class BaseFormatCheck(TargetCheck):
         return False
 
     def is_position_based(self, string):
-        return True
+        raise NotImplementedError()
+
+    def check_single(self, source, target, unit, cache_slot):
+        '''
+        We don't check target strings here.
+        '''
+        return False
 
 
 class PythonFormatCheck(BaseFormatCheck):
@@ -244,6 +250,9 @@ class CFormatCheck(BaseFormatCheck):
     description = _('Format string does not match source')
     flag = 'c-format'
     regexp = C_PRINTF_MATCH
+
+    def is_position_based(self, string):
+        return True
 
 
 class PythonBraceFormatCheck(BaseFormatCheck):

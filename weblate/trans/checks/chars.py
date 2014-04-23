@@ -192,7 +192,7 @@ class EndColonCheck(TargetCheck):
                     (u';', u':', u'：', u'.', u'。')
                 )
             return False
-        return self.check_chars(source, target, -1, (u':', u'：'))
+        return self.check_chars(source, target, -1, (u':', u'：', u'៖'))
 
 
 class EndQuestionCheck(TargetCheck):
@@ -263,6 +263,8 @@ class EndExclamationCheck(TargetCheck):
             if source[-1] == '!':
                 if target[-2:] not in self.exclamation_fr:
                     return True
+            return False
+        if source.endswith('Texy!') or target.endswith('Texy!'):
             return False
         return self.check_chars(
             source,

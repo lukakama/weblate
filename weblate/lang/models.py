@@ -19,7 +19,7 @@
 #
 
 from django.db import models
-from django.utils.translation import ugettext as _, pgettext_lazy
+from django.utils.translation import ugettext as _
 from django.utils.safestring import mark_safe
 from translate.lang.data import languages
 from weblate.lang import data
@@ -30,33 +30,6 @@ from django.db.models.signals import post_syncdb
 from django.dispatch import receiver
 from weblate.appsettings import SIMPLIFY_LANGUAGES
 import weblate
-
-# Plural types definition
-PLURAL_NONE = 0
-PLURAL_ONE_OTHER = 1
-PLURAL_ONE_FEW_OTHER = 2
-PLURAL_ARABIC = 3
-PLURAL_ONE_TWO_OTHER = 4
-PLURAL_ONE_TWO_THREE_OTHER = 5
-PLURAL_ONE_TWO_FEW_OTHER = 6
-PLURAL_ONE_OTHER_ZERO = 7
-PLURAL_ONE_FEW_MANY_OTHER = 8
-PLURAL_TWO_OTHER = 9
-PLURAL_ONE_TWO_FEW_MANY_OTHER = 10
-PLURAL_UNKNOWN = 666
-
-# Plural equation - type mappings
-PLURAL_MAPPINGS = (
-    (data.ONE_OTHER_PLURALS, PLURAL_ONE_OTHER),
-    (data.ONE_FEW_OTHER_PLURALS, PLURAL_ONE_FEW_OTHER),
-    (data.ONE_TWO_OTHER_PLURALS, PLURAL_ONE_TWO_OTHER),
-    (data.ONE_TWO_FEW_OTHER_PLURALS, PLURAL_ONE_TWO_FEW_OTHER),
-    (data.ONE_TWO_THREE_OTHER_PLURALS, PLURAL_ONE_TWO_THREE_OTHER),
-    (data.ONE_OTHER_ZERO_PLURALS, PLURAL_ONE_OTHER_ZERO),
-    (data.ONE_FEW_MANY_OTHER_PLURALS, PLURAL_ONE_FEW_MANY_OTHER),
-    (data.TWO_OTHER_PLURALS, PLURAL_TWO_OTHER),
-    (data.ONE_TWO_FEW_MANY_OTHER_PLURALS, PLURAL_ONE_TWO_FEW_MANY_OTHER),
-)
 
 
 def get_plural_type(code, pluralequation):
@@ -74,23 +47,23 @@ def get_plural_type(code, pluralequation):
 
     # No plural
     if pluralequation == '0':
-        return PLURAL_NONE
+        return data.PLURAL_NONE
 
     # Standard plural equations
-    for mapping in PLURAL_MAPPINGS:
+    for mapping in data.PLURAL_MAPPINGS:
         if pluralequation in mapping[0]:
             return mapping[1]
 
     # Arabic special case
     if base_code in ('ar',):
-        return PLURAL_ARABIC
+        return data.PLURAL_ARABIC
 
     # Log error in case of uknown mapping
     weblate.logger.error(
         'Can not guess type of plural for %s: %s', code, pluralequation
     )
 
-    return PLURAL_UNKNOWN
+    return data.PLURAL_UNKNOWN
 
 
 class LanguageManager(models.Manager):
@@ -264,6 +237,12 @@ class LanguageManager(models.Manager):
                 lang.direction = 'rtl'
             else:
                 lang.direction = 'ltr'
+
+            # Get plural type
+            lang.plural_type = get_plural_type(
+                lang.code,
+                lang.pluralequation
+            )
             lang.save()
 
     def have_translation(self):
@@ -283,82 +262,21 @@ def setup_lang(sender, app, **kwargs):
         Language.objects.setup(False)
 
 
-# Plural names mapping
-PLURAL_NAMES = {
-    PLURAL_NONE: ('',),
-    PLURAL_ONE_OTHER: (
-        pgettext_lazy('Plural form description', 'One'),
-        pgettext_lazy('Plural form description', 'Other'),
-    ),
-    PLURAL_ONE_FEW_OTHER: (
-        pgettext_lazy('Plural form description', 'One'),
-        pgettext_lazy('Plural form description', 'Few'),
-        pgettext_lazy('Plural form description', 'Other'),
-    ),
-    PLURAL_ARABIC: (
-        pgettext_lazy('Plural form description', 'Zero'),
-        pgettext_lazy('Plural form description', 'One'),
-        pgettext_lazy('Plural form description', 'Two'),
-        pgettext_lazy('Plural form description', 'Few'),
-        pgettext_lazy('Plural form description', 'Many'),
-        pgettext_lazy('Plural form description', 'Other'),
-    ),
-    PLURAL_ONE_TWO_OTHER: (
-        pgettext_lazy('Plural form description', 'One'),
-        pgettext_lazy('Plural form description', 'Two'),
-        pgettext_lazy('Plural form description', 'Other'),
-    ),
-    PLURAL_ONE_TWO_THREE_OTHER: (
-        pgettext_lazy('Plural form description', 'One'),
-        pgettext_lazy('Plural form description', 'Two'),
-        pgettext_lazy('Plural form description', 'Three'),
-        pgettext_lazy('Plural form description', 'Other'),
-    ),
-    PLURAL_ONE_TWO_FEW_OTHER: (
-        pgettext_lazy('Plural form description', 'One'),
-        pgettext_lazy('Plural form description', 'Two'),
-        pgettext_lazy('Plural form description', 'Few'),
-        pgettext_lazy('Plural form description', 'Other'),
-    ),
-    PLURAL_ONE_OTHER_ZERO: (
-        pgettext_lazy('Plural form description', 'One'),
-        pgettext_lazy('Plural form description', 'Other'),
-        pgettext_lazy('Plural form description', 'Zero'),
-    ),
-    PLURAL_ONE_FEW_MANY_OTHER: (
-        pgettext_lazy('Plural form description', 'One'),
-        pgettext_lazy('Plural form description', 'Few'),
-        pgettext_lazy('Plural form description', 'Many'),
-        pgettext_lazy('Plural form description', 'Other'),
-    ),
-    PLURAL_ONE_TWO_FEW_MANY_OTHER: (
-        pgettext_lazy('Plural form description', 'One'),
-        pgettext_lazy('Plural form description', 'Two'),
-        pgettext_lazy('Plural form description', 'Few'),
-        pgettext_lazy('Plural form description', 'Many'),
-        pgettext_lazy('Plural form description', 'Other'),
-    ),
-    PLURAL_TWO_OTHER: (
-        pgettext_lazy('Plural form description', 'Two'),
-        pgettext_lazy('Plural form description', 'Other'),
-    ),
-}
-
-
 class Language(models.Model, PercentMixin):
     PLURAL_CHOICES = (
-        (PLURAL_NONE, 'None'),
-        (PLURAL_ONE_OTHER, 'One/other (classic plural)'),
-        (PLURAL_ONE_FEW_OTHER, 'One/few/other (Slavic languages)'),
-        (PLURAL_ARABIC, 'Arabic languages'),
-        (PLURAL_ONE_TWO_OTHER, 'One/two/other'),
-        (PLURAL_ONE_TWO_FEW_OTHER, 'One/two/few/other'),
-        (PLURAL_ONE_TWO_THREE_OTHER, 'One/two/three/other'),
-        (PLURAL_ONE_OTHER_ZERO, 'One/other/zero'),
-        (PLURAL_ONE_FEW_MANY_OTHER, 'One/few/many/other'),
-        (PLURAL_TWO_OTHER, 'Two/other'),
-        (PLURAL_ONE_TWO_FEW_MANY_OTHER, 'One/two/few/many/other'),
-        (PLURAL_UNKNOWN, 'Unknown'),
+        (data.PLURAL_NONE, 'None'),
+        (data.PLURAL_ONE_OTHER, 'One/other (classic plural)'),
+        (data.PLURAL_ONE_FEW_OTHER, 'One/few/other (Slavic languages)'),
+        (data.PLURAL_ARABIC, 'Arabic languages'),
+        (data.PLURAL_ZERO_ONE_OTHER, 'Zero/one/other'),
+        (data.PLURAL_ONE_TWO_OTHER, 'One/two/other'),
+        (data.PLURAL_ONE_TWO_FEW_OTHER, 'One/two/few/other'),
+        (data.PLURAL_ONE_TWO_THREE_OTHER, 'One/two/three/other'),
+        (data.PLURAL_ONE_OTHER_ZERO, 'One/other/zero'),
+        (data.PLURAL_ONE_FEW_MANY_OTHER, 'One/few/many/other'),
+        (data.PLURAL_TWO_OTHER, 'Two/other'),
+        (data.PLURAL_ONE_TWO_FEW_MANY_OTHER, 'One/two/few/many/other'),
+        (data.PLURAL_UNKNOWN, 'Unknown'),
     )
     code = models.SlugField(unique=True)
     name = models.CharField(max_length=100)
@@ -371,7 +289,7 @@ class Language(models.Model, PercentMixin):
     )
     plural_type = models.IntegerField(
         choices=PLURAL_CHOICES,
-        default=PLURAL_ONE_OTHER
+        default=data.PLURAL_ONE_OTHER
     )
 
     objects = LanguageManager()
@@ -387,7 +305,7 @@ class Language(models.Model, PercentMixin):
         self._percents = None
 
     def __unicode__(self):
-        if (not '(' in self.name
+        if ('(' not in self.name
                 and ('_' in self.code or '-' in self.code)
                 and self.code not in ('zh_TW', 'zh_CN')):
             return '%s (%s)' % (_(self.name), self.code)
@@ -404,8 +322,8 @@ class Language(models.Model, PercentMixin):
         Returns label for plural form.
         '''
         try:
-            return unicode(PLURAL_NAMES[self.plural_type][idx])
-        except:
+            return unicode(data.PLURAL_NAMES[self.plural_type][idx])
+        except (IndexError, KeyError):
             if idx == 0:
                 return _('Singular')
             elif idx == 0:
@@ -448,27 +366,8 @@ class Language(models.Model, PercentMixin):
         '''
         Fixes name, in most cases when wrong one is provided by ttkit.
         '''
-        # Fixups (mostly shortening) of langauge names
-        if self.code == 'ia':
-            self.name = 'Interlingua'
-        elif self.code == 'el':
-            self.name = 'Greek'
-        elif self.code == 'st':
-            self.name = 'Sotho'
-        elif self.code == 'oc':
-            self.name = 'Occitan'
-        elif self.code == 'nb':
-            self.name = 'Norwegian Bokmål'
-        elif self.code == 'pa':
-            self.name = 'Punjabi'
-        elif self.code == 'zh_CN':
-            self.name = 'Simplified Chinese'
-        elif self.code == 'zh_TW':
-            self.name = 'Traditional Chinese'
-        elif self.code == 'ca@valencia':
-            self.name = 'Valencian'
-        elif self.code == 'ky':
-            self.name = 'Kyrgyz'
+        if self.code in data.LANGUAGE_NAME_FIXUPS:
+            self.name = data.LANGUAGE_NAME_FIXUPS[self.code]
 
     def set_direction(self):
         '''

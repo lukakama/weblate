@@ -27,7 +27,7 @@ from django.contrib import messages
 from django.conf import settings
 from weblate import settings_example
 from weblate import appsettings
-from weblate.trans.util import HAS_LIBRAVATAR
+from weblate.accounts.avatar import HAS_LIBRAVATAR
 from weblate.accounts.forms import HAS_ICU
 import weblate
 import django
@@ -110,6 +110,12 @@ def performance(request):
         _('Django caching'),
         cache,
         'production-cache',
+    ))
+    # Avatar caching
+    checks.append((
+        _('Avatar caching'),
+        'avatar' in settings.CACHES,
+        'production-cache-avatar',
     ))
     # Check email setup
     default_mails = (
@@ -212,7 +218,8 @@ def get_key_data():
     '''
     # Read key data if it exists
     if os.path.exists(RSA_KEY_FILE):
-        key_data = file(RSA_KEY_FILE).read()
+        with file(RSA_KEY_FILE) as handle:
+            key_data = handle.read()
         key_type, key_fingerprint, key_id = key_data.strip().split(None, 2)
         return {
             'key': key_data,

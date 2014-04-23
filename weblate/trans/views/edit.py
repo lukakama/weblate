@@ -74,7 +74,9 @@ def cleanup_session(session):
     '''
     now = int(time.time())
     for key in session.keys():
-        if key.startswith('search_') and session[key]['ttl'] < now:
+        value = session[key]
+        if (key.startswith('search_')
+                and (not isinstance(value, dict) or value['ttl'] < now)):
             del session[key]
 
 
@@ -183,7 +185,7 @@ def search(translation, request):
     search_id = str(uuid.uuid1())
     search_result = {
         'query': search_query,
-        'name': name,
+        'name': unicode(name),
         'ids': unit_ids,
         'search_id': search_id,
         'ttl': int(time.time()) + 86400,
@@ -352,6 +354,10 @@ def handle_merge(translation, request, next_unit_url):
 
     mergeform = MergeForm(translation, request.GET)
     if not mergeform.is_valid():
+        messages.error(
+            request,
+            _('Invalid merge request!')
+        )
         return
 
     unit = mergeform.cleaned_data['unit']

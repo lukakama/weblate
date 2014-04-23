@@ -3,6 +3,7 @@
 /weblate/repos/
 locale/*/*/*.mo
 /weblate/whoosh-index/
+/weblate/avatar-cache/
 weblate-*.tar.*
 /translate
 /social
@@ -12,3 +13,4 @@ weblate-*.tar.*
 /reports/
 /tags
 /django
+.idea/*
