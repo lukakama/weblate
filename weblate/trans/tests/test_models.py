@@ -30,7 +30,8 @@ from django.core.exceptions import ValidationError
 import shutil
 import os
 import git
-from weblate.trans.models import Project, SubProject, Unit
+from weblate.trans.models import Project, SubProject, Unit, WhiteboardMessage
+from weblate.trans.models.source import Source
 from weblate import appsettings
 from weblate.trans.tests.test_util import get_test_file
 
@@ -626,3 +627,39 @@ class TranslationTest(RepoTestCase):
         project = self.create_subproject()
         translation = project.translation_set.get(language_code='cs')
         translation.full_clean()
+
+
+class WhiteboardMessageTest(TestCase):
+    """Test(s) for WhiteboardMessage model."""
+
+    def test_can_be_imported(self):
+        """Test that whiteboard model can be imported.
+
+        Rather dumb test just to make sure there are no obvious parsing errors.
+        """
+        WhiteboardMessage()
+
+
+class SourceTest(RepoTestCase):
+    """
+    Source objects testing.
+    """
+    def setUp(self):
+        super(SourceTest, self).setUp()
+        self.create_subproject()
+
+    def test_exists(self):
+        self.assertTrue(Source.objects.exists())
+
+    def test_source_info(self):
+        unit = Unit.objects.all()[0]
+        self.assertIsNotNone(unit.source_info)
+
+    def test_priority(self):
+        unit = Unit.objects.all()[0]
+        self.assertEquals(unit.priority, 100)
+        source = unit.source_info
+        source.priority = 200
+        source.save()
+        unit2 = Unit.objects.get(pk=unit.pk)
+        self.assertEquals(unit2.priority, 200)

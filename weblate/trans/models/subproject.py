@@ -243,7 +243,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
 
     is_git_lockable = True
 
-    class Meta:
+    class Meta(object):
         ordering = ['project__name', 'name']
         unique_together = (
             ('project', 'name'),
@@ -848,26 +848,6 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                 _('Export URL is not used when repository is linked!')
             )
 
-    def clean_template(self):
-        '''
-        Validates whether template can be loaded.
-        '''
-
-        full_path = os.path.join(self.get_path(), self.template)
-        if not os.path.exists(full_path):
-            raise ValidationError(_('Template file not found!'))
-
-        try:
-            self.load_template_store()
-        except ValueError:
-            raise ValidationError(
-                _('Format of translation base file could not be recognized.')
-            )
-        except Exception as exc:
-            raise ValidationError(
-                _('Failed to parse translation base file: %s') % str(exc)
-            )
-
     def clean_lang_codes(self, matches):
         '''
         Validates that there are no double language codes found in the files.
@@ -951,6 +931,47 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                 'project settings.'
             ))
 
+    def clean_template(self):
+        """
+        Validates template value.
+        """
+        # Test for unexpected template usage
+        if self.template != '' and self.file_format_cls.monolingual is False:
+            raise ValidationError(
+                _('You can not base file with bilingual translation!')
+            )
+
+        # Special case for Gettext
+        if self.template.endswith('.pot') and self.filemask.endswith('.po'):
+            raise ValidationError(
+                _('You can not base file with bilingual translation!')
+            )
+
+        # Validate template loading
+        if self.has_template():
+            full_path = os.path.join(self.get_path(), self.template)
+            if not os.path.exists(full_path):
+                raise ValidationError(_('Template file not found!'))
+
+            try:
+                self.load_template_store()
+            except ValueError:
+                raise ValidationError(
+                    _(
+                        'Format of translation base file '
+                        'could not be recognized.'
+                    )
+                )
+            except Exception as exc:
+                raise ValidationError(
+                    _('Failed to parse translation base file: %s') % str(exc)
+                )
+
+        elif self.file_format_cls.monolingual:
+            raise ValidationError(
+                _('You can not use monolingual translation without base file!')
+            )
+
     def clean(self):
         '''
         Validator fetches repository and tries to find translation files.
@@ -983,25 +1004,8 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         # Try parsing files
         self.clean_files(matches)
 
-        # Test for unexpected template usage
-        if self.template != '' and self.file_format_cls.monolingual is False:
-            raise ValidationError(
-                _('You can not base file with bilingual translation!')
-            )
-
-        # Special case for Gettext
-        if self.template.endswith('.pot') and self.filemask.endswith('.po'):
-            raise ValidationError(
-                _('You can not base file with bilingual translation!')
-            )
-
-        # Validate template
-        if self.has_template():
-            self.clean_template()
-        elif self.file_format_cls.monolingual:
-            raise ValidationError(
-                _('You can not use monolingual translation without base file!')
-            )
+        # Template validation
+        self.clean_template()
 
         # New language options
         self.clean_new_lang()
@@ -1188,9 +1192,10 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         if not self.file_format_cls.is_valid_base_for_new(base_filename):
             raise ValueError('Not supported operation!')
 
-        filename = os.path.join(
+        filename = self.file_format_cls.get_language_filename(
             self.get_path(),
-            self.filemask.replace('*', language.code)
+            self.filemask,
+            language.code
         )
 
         # Create directory for a translation

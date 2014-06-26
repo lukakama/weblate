@@ -22,7 +22,8 @@ from django.contrib import admin
 from django.conf import settings
 from weblate.trans.models import (
     Project, SubProject, Translation, Advertisement,
-    Unit, Suggestion, Comment, Check, Dictionary, Change
+    Unit, Suggestion, Comment, Check, Dictionary, Change,
+    Source, WhiteboardMessage
 )
 
 
@@ -33,17 +34,17 @@ class ProjectAdmin(admin.ModelAdmin):
     actions = ['update_from_git', 'update_checks', 'force_commit']
 
     def update_from_git(self, request, queryset):
-        '''
+        """
         Updates selected resources from git.
-        '''
+        """
         for project in queryset:
             project.do_update(request)
         self.message_user(request, "Updated %d git repos." % queryset.count())
 
     def update_checks(self, request, queryset):
-        '''
+        """
         Recalculates checks for selected resources.
-        '''
+        """
         cnt = 0
         units = Unit.objects.filter(
             translation__subproject__project__in=queryset
@@ -54,9 +55,9 @@ class ProjectAdmin(admin.ModelAdmin):
         self.message_user(request, "Updated checks for %d units." % cnt)
 
     def force_commit(self, request, queryset):
-        '''
+        """
         Commits pending changes for selected resources.
-        '''
+        """
         for project in queryset:
             project.commit_pending(request)
         self.message_user(
@@ -73,17 +74,17 @@ class SubProjectAdmin(admin.ModelAdmin):
     actions = ['update_from_git', 'update_checks', 'force_commit']
 
     def update_from_git(self, request, queryset):
-        '''
+        """
         Updates selected resources from git.
-        '''
+        """
         for project in queryset:
             project.do_update(request)
         self.message_user(request, "Updated %d git repos." % queryset.count())
 
     def update_checks(self, request, queryset):
-        '''
+        """
         Recalculates checks for selected resources.
-        '''
+        """
         cnt = 0
         units = Unit.objects.filter(
             translation__subproject__in=queryset
@@ -97,9 +98,9 @@ class SubProjectAdmin(admin.ModelAdmin):
         )
 
     def force_commit(self, request, queryset):
-        '''
+        """
         Commits pending changes for selected resources.
-        '''
+        """
         for project in queryset:
             project.commit_pending(request)
         self.message_user(
@@ -120,9 +121,9 @@ class TranslationAdmin(admin.ModelAdmin):
     actions = ['enable_translation', 'disable_translation']
 
     def enable_translation(self, request, queryset):
-        '''
+        """
         Mass enabling of translations.
-        '''
+        """
         queryset.update(enabled=True)
         self.message_user(
             request,
@@ -130,9 +131,9 @@ class TranslationAdmin(admin.ModelAdmin):
         )
 
     def disable_translation(self, request, queryset):
-        '''
+        """
         Mass disabling of translations.
-        '''
+        """
         queryset.update(enabled=False)
         self.message_user(
             request,
@@ -188,16 +189,28 @@ class ChangeAdmin(admin.ModelAdmin):
     raw_id_fields = ('unit',)
 
 
+class WhiteboardAdmin(admin.ModelAdmin):
+    list_display = ['message']
+    prepopulated_fields = {}
+    search_fields = ['message']
+
+
 class AdvertisementAdmin(admin.ModelAdmin):
     list_display = ['placement', 'date_start', 'date_end', 'text']
     search_fields = ['text', 'note']
-    date_hiearchy = 'date_end'
+    date_hierarchy = 'date_end'
+
+
+class SourceAdmin(admin.ModelAdmin):
+    list_display = ['checksum', 'priority', 'timestamp']
+    date_hierarchy = 'timestamp'
 
 
 # Register in admin interface
 admin.site.register(Project, ProjectAdmin)
 admin.site.register(SubProject, SubProjectAdmin)
 admin.site.register(Advertisement, AdvertisementAdmin)
+admin.site.register(WhiteboardMessage, WhiteboardAdmin)
 
 # Show some controls only in debug mode
 if settings.DEBUG:
@@ -208,3 +221,4 @@ if settings.DEBUG:
     admin.site.register(Check, CheckAdmin)
     admin.site.register(Dictionary, DictionaryAdmin)
     admin.site.register(Change, ChangeAdmin)
+    admin.site.register(Source, SourceAdmin)

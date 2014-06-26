@@ -78,6 +78,7 @@ TIME_ZONE = 'Europe/Prague'
 LANGUAGE_CODE = 'en-us'
 
 LANGUAGES = (
+    ('az', u'Azərbaycan'),
     ('be', u'Беларуская'),
     ('br', u'Brezhoneg'),
     ('ca', u'Català'),
@@ -95,6 +96,7 @@ LANGUAGES = (
     ('id', 'Indonesia'),
     ('ja', u'日本語'),
     ('ko', u'한국어'),
+    ('ksh', u'Kölsch'),
     ('nl', u'Nederlands'),
     ('pl', u'Polski'),
     ('pt', u'Português'),
@@ -517,3 +519,6 @@ ALLOWED_HOSTS = []
 #    r'/data/(.*)$',     # Allowing public access to data exports
 #    r'/hooks/(.*)$',    # Allowing public access to notification hooks
 # )
+
+# Enable whiteboard functionality - under development so disabled by default.
+ENABLE_WHITEBOARD = False

@@ -20,7 +20,6 @@
 
 from django.shortcuts import render, redirect
 from django.utils.translation import ugettext as _
-from django.http import Http404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Sum, Count, Q
@@ -31,7 +30,7 @@ import django.views.defaults
 
 from weblate.trans.models import (
     Project, SubProject, Translation, Check,
-    Dictionary, Change, Unit
+    Dictionary, Change, Unit, WhiteboardMessage
 )
 from weblate.trans.requirements import get_versions, get_optional_versions
 from weblate.lang.models import Language
@@ -51,10 +50,10 @@ from urllib import urlencode
 
 
 def home(request):
-    '''
+    """
     Home page of Weblate showing list of projects, stats
     and user links if logged in.
-    '''
+    """
 
     if 'show_set_password' in request.session:
         messages.warning(
@@ -65,6 +64,9 @@ def home(request):
             )
         )
         return redirect('password')
+
+    wb_messages = WhiteboardMessage.objects.order_by(
+        'message')
 
     projects = Project.objects.all_acl(request.user)
     if projects.count() == 1:
@@ -106,14 +108,15 @@ def home(request):
             'last_changes_url': '',
             'usertranslations': usertranslations,
             'search_form': SearchForm(),
+            'whiteboard_messages': wb_messages,
         }
     )
 
 
 def search(request):
-    '''
-    Performs sitewide search on units.
-    '''
+    """
+    Performs site-wide search on units.
+    """
     search_form = SearchForm(request.GET)
     context = {
         'search_form': search_form,
@@ -272,76 +275,6 @@ def show_subproject(request, project, subproject):
     )
 
 
-def review_source(request, project, subproject):
-    '''
-    Listing of source strings to review.
-    '''
-    obj = get_subproject(request, project, subproject)
-
-    # Grab first translation in subproject
-    # (this assumes all have same source strings)
-    try:
-        source = obj.translation_set.all()[0]
-    except Translation.DoesNotExist:
-        raise Http404('No translation exists in this subproject.')
-
-    # Grab search type and page number
-    rqtype = request.GET.get('type', 'all')
-    limit = request.GET.get('limit', 50)
-    page = request.GET.get('page', 1)
-    ignored = 'ignored' in request.GET
-
-    # Fiter units
-    sources = source.unit_set.filter_type(rqtype, source, ignored)
-
-    paginator = Paginator(sources, limit)
-
-    try:
-        sources = paginator.page(page)
-    except PageNotAnInteger:
-        # If page is not an integer, deliver first page.
-        sources = paginator.page(1)
-    except EmptyPage:
-        # If page is out of range (e.g. 9999), deliver last page of results.
-        sources = paginator.page(paginator.num_pages)
-
-    return render(
-        request,
-        'source-review.html',
-        {
-            'object': obj,
-            'source': source,
-            'sources': sources,
-            'rqtype': rqtype,
-            'title': _('Review source strings in %s') % obj.__unicode__(),
-        }
-    )
-
-
-def show_source(request, project, subproject):
-    '''
-    Show source strings summary and checks.
-    '''
-    obj = get_subproject(request, project, subproject)
-
-    # Grab first translation in subproject
-    # (this assumes all have same source strings)
-    try:
-        source = obj.translation_set.all()[0]
-    except Translation.DoesNotExist:
-        raise Http404('No translation exists in this subproject.')
-
-    return render(
-        request,
-        'source.html',
-        {
-            'object': obj,
-            'source': source,
-            'title': _('Source strings in %s') % obj.__unicode__(),
-        }
-    )
-
-
 def show_translation(request, project, subproject, lang):
     obj = get_translation(request, project, subproject, lang)
     last_changes = Change.objects.prefetch().filter(
@@ -393,9 +326,9 @@ def show_translation(request, project, subproject, lang):
 
 
 def not_found(request):
-    '''
+    """
     Error handler showing list of available projects.
-    '''
+    """
     return render(
         request,
         '404.html',
@@ -409,9 +342,9 @@ def not_found(request):
 
 
 def denied(request):
-    '''
+    """
     Error handler showing list of available projects.
-    '''
+    """
     return render(
         request,
         '403.html',
@@ -425,9 +358,9 @@ def denied(request):
 
 
 def server_error(request):
-    '''
-    Error handler for server erros.
-    '''
+    """
+    Error handler for server errors.
+    """
     try:
         return render(
             request,
@@ -439,9 +372,9 @@ def server_error(request):
 
 
 def about(request):
-    '''
+    """
     Shows about page with version information.
-    '''
+    """
     context = {}
     totals = Profile.objects.aggregate(
         Sum('translated'), Sum('suggested'), Count('id')

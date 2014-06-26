@@ -1,10 +1,19 @@
 Changes
 =======
 
-weblate 1.9
+weblate 1.10
 -----------
 
 Released on ? 2014.
+
+* Documentation improvements.
+* Added whiteboard for site wide messages.
+* Configurable strings priority.
+
+weblate 1.9
+-----------
+
+Released on May 6th 2014.
 
 * Django 1.6 compatibility.
 * No longer maintained compatibility with Django 1.4.

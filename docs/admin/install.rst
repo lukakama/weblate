@@ -18,7 +18,7 @@ GitPython (>= 0.3.2)
     https://github.com/gitpython-developers/GitPython
 Git (>= 1.7.2)
     http://git-scm.com/
-python-social-auth (>= 0.1.17)
+python-social-auth (>= 0.1.17, < 0.1.24)
     http://psa.matiasaguirre.net/
 Whoosh (>= 2.5, 2.5.2 is recommended)
     http://bitbucket.org/mchaput/whoosh/
@@ -26,7 +26,7 @@ PIL or Pillow library
     http://python-imaging.github.io/
 lxml (>= 3.1.0)
     http://lxml.de/
-south
+South (>= 0.7.5)
     http://south.aeracode.org/
 libravatar (optional for federated avatar support)
     https://pypi.python.org/pypi/pyLibravatar

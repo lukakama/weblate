@@ -129,6 +129,8 @@ class Translation(models.Model, URLMixin, PercentMixin):
     fuzzy = models.IntegerField(default=0, db_index=True)
     total = models.IntegerField(default=0, db_index=True)
     translated_words = models.IntegerField(default=0)
+    fuzzy_words = models.IntegerField(default=0)
+    failing_checks_words = models.IntegerField(default=0)
     total_words = models.IntegerField(default=0)
     failing_checks = models.IntegerField(default=0, db_index=True)
     have_suggestion = models.IntegerField(default=0, db_index=True)
@@ -146,7 +148,7 @@ class Translation(models.Model, URLMixin, PercentMixin):
 
     is_git_lockable = False
 
-    class Meta:
+    class Meta(object):
         ordering = ['language__name']
         permissions = (
             ('upload_translation', "Can upload translation"),
@@ -689,6 +691,26 @@ class Translation(models.Model, URLMixin, PercentMixin):
         if self.translated_words is None:
             self.translated_words = 0
 
+        # Count fuzzy words
+        self.fuzzy_words = self.unit_set.filter(
+            fuzzy=True
+        ).aggregate(
+            Sum('num_words')
+        )['num_words__sum']
+        # Nothing matches filter
+        if self.fuzzy_words is None:
+            self.fuzzy_words = 0
+
+        # Count words with failing checks
+        self.failing_checks_words = self.unit_set.filter(
+            has_failing_check=True
+        ).aggregate(
+            Sum('num_words')
+        )['num_words__sum']
+        # Nothing matches filter
+        if self.failing_checks_words is None:
+            self.failing_checks_words = 0
+
         # Store hash will save object
         self.store_hash()
 
@@ -700,7 +722,7 @@ class Translation(models.Model, URLMixin, PercentMixin):
         self.revision = blob_hash
         self.save()
 
-    def get_last_author(self, email=True):
+    def get_last_author(self, email=False):
         '''
         Returns last autor of change done in Weblate.
         '''
@@ -727,7 +749,7 @@ class Translation(models.Model, URLMixin, PercentMixin):
         Commits any pending changes.
         '''
         # Get author of last changes
-        last = self.get_last_author()
+        last = self.get_last_author(True)
 
         # If it is same as current one, we don't have to commit
         if author == last or last is None:

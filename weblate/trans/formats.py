@@ -556,6 +556,17 @@ class FileFormat(object):
         return True
 
     @staticmethod
+    def get_language_filename(path, mask, code):
+        """
+        Return full filename of a language file for given
+        path, filemaks and language code.
+        """
+        return os.path.join(
+            path,
+            mask.replace('*', code)
+        )
+
+    @staticmethod
     def add_language(filename, code, base):
         '''
         Adds new language file.
@@ -748,11 +759,22 @@ class AndroidFormat(FileFormat):
         return True
 
     @staticmethod
+    def get_language_filename(path, mask, code):
+        """
+        Return full filename of a language file for given
+        path, filemaks and language code.
+        """
+        return os.path.join(
+            path,
+            mask.replace('*', code.replace('_', '-r'))
+        )
+
+    @staticmethod
     def add_language(filename, code, base):
         '''
         Adds new language file.
         '''
-        with file(filename, 'w') as output:
+        with open(filename, 'w') as output:
             output.write('''<?xml version="1.0" encoding="utf-8"?>
 <resources></resources>''')
 
