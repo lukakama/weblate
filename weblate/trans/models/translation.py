@@ -30,6 +30,7 @@ from django.core.urlresolvers import reverse
 import os
 import git
 import traceback
+import ConfigParser
 from translate.storage import poheader
 from datetime import datetime, timedelta
 
@@ -38,7 +39,6 @@ from weblate import appsettings
 from weblate.lang.models import Language
 from weblate.trans.formats import AutoFormat
 from weblate.trans.checks import CHECKS
-from weblate.trans.models.subproject import SubProject
 from weblate.trans.models.project import Project
 from weblate.trans.util import (
     get_site_url, sleep_while_git_locked, translation_percent
@@ -120,7 +120,7 @@ class TranslationManager(models.Manager):
 
 
 class Translation(models.Model, URLMixin, PercentMixin):
-    subproject = models.ForeignKey(SubProject)
+    subproject = models.ForeignKey('SubProject')
     language = models.ForeignKey(Language)
     revision = models.CharField(max_length=100, default='', blank=True)
     filename = models.CharField(max_length=200)
@@ -456,7 +456,7 @@ class Translation(models.Model, URLMixin, PercentMixin):
                 # There are other units as well, but some checks
                 # (eg. consistency) needs update now
                 for unit in units:
-                    unit.check()
+                    unit.run_checks()
                 continue
 
             # Last unit referencing to these checks
@@ -808,7 +808,7 @@ class Translation(models.Model, URLMixin, PercentMixin):
             value = cnf.get(section, key)
             if value == expected:
                 return
-        except:
+        except ConfigParser.Error:
             pass
 
         # Add section if it does not exist
@@ -1218,7 +1218,7 @@ class Translation(models.Model, URLMixin, PercentMixin):
                 fileobj,
                 self.subproject.template_store
             )
-        except:
+        except Exception:
             # Fallback to automatic detection
             fileobj.seek(0)
             store = AutoFormat(fileobj)

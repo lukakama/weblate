@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 #
 # Copyright © 2012 - 2014 Michal Čihař <michal@cihar.com>
@@ -18,15 +19,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from django.core.management.base import BaseCommand
-from weblate import get_versions_string
+import os.path
 
 
-class Command(BaseCommand):
-    help = 'lists versions of required software components'
-
-    def handle(self, *args, **options):
-        '''
-        Prints versions of dependencies.
-        '''
-        print get_versions_string()
+def get_script_name(name):
+    '''
+    Returns script name from string possibly containing full path and
+    parameters.
+    '''
+    return os.path.basename(name).split()[0]

@@ -27,6 +27,7 @@ from translate.storage.xliff import xliffunit
 from translate.storage.po import pounit, pofile
 from translate.storage.php import phpunit
 from translate.storage.ts2 import tsunit
+from translate.storage.jsonl10n import JsonUnit
 from translate.storage import mo
 from translate.storage import factory
 from weblate.trans.util import get_string, join_plural
@@ -49,7 +50,12 @@ def register_fileformat(fileformat):
     '''
     Registers fileformat in dictionary.
     '''
-    FILE_FORMATS[fileformat.format_id] = fileformat
+    try:
+        fileformat.get_class()
+        FILE_FORMATS[fileformat.format_id] = fileformat
+    except (AttributeError, ImportError):
+        pass
+    return fileformat
 
 
 class FileUnit(object):
@@ -158,6 +164,8 @@ class FileUnit(object):
                 self.unit.source,
                 self.unit.source,
             ])
+        if isinstance(self.mainunit, JsonUnit) and self.template is None:
+            return self.mainunit.getid().lstrip('.')
         if self.is_unit_key_value():
             # Need to decode property encoded string
             if isinstance(self.mainunit, propunit):
@@ -296,6 +304,8 @@ class FileUnit(object):
         For some reason, blank string does not mean non translatable
         unit in some formats (XLIFF), so lets skip those as well.
         '''
+        if isinstance(self.mainunit, JsonUnit):
+            return True
         return self.mainunit.istranslatable() and not self.mainunit.isblank()
 
     def set_target(self, target):
@@ -349,7 +359,10 @@ class FileFormat(object):
         return cls.parse_store(storefile)
 
     @classmethod
-    def parse_store(cls, storefile):
+    def get_class(cls):
+        """
+        Returns class for handling this module.
+        """
         # Tuple style loader, import from translate toolkit
         module_name, class_name = cls.loader
         module = importlib.import_module(
@@ -357,7 +370,14 @@ class FileFormat(object):
         )
 
         # Get the class
-        storeclass = getattr(module, class_name)
+        return getattr(module, class_name)
+
+    @classmethod
+    def parse_store(cls, storefile):
+        """
+        Parses the store.
+        """
+        storeclass = cls.get_class()
 
         # Parse file
         store = storeclass.parsefile(storefile)
@@ -389,6 +409,41 @@ class FileFormat(object):
             and self.template_store is not None
         )
 
+    def _find_unit_template(self, context, source):
+        # Need to create new unit based on template
+        template_ttkit_unit = self.template_store.findid(context)
+        # We search by ID when using template
+        ttkit_unit = self.store.findid(context)
+        # We always need new unit to translate
+        if ttkit_unit is None:
+            ttkit_unit = template_ttkit_unit
+            if template_ttkit_unit is None:
+                raise Exception(
+                    'Could not find template unit for new unit!'
+                )
+            add = True
+        else:
+            add = False
+
+        return (FileUnit(ttkit_unit, template_ttkit_unit), add)
+
+    def _find_unit_bilingual(self, context, source):
+        # Find all units with same source
+        found_units = self.store.findunits(source)
+        # Find is broken for propfile, ignore results
+        if len(found_units) > 0 and not isinstance(self.store, propfile):
+            for ttkit_unit in found_units:
+                # Does context match?
+                if ttkit_unit.getcontext() == context:
+                    return (FileUnit(ttkit_unit), False)
+        else:
+            # Fallback to manual find for value based files
+            for ttkit_unit in self.store.units:
+                ttkit_unit = FileUnit(ttkit_unit)
+                if ttkit_unit.get_source() == source:
+                    return (ttkit_unit, False)
+        return (None, False)
+
     def find_unit(self, context, source):
         '''
         Finds unit by context and source.
@@ -397,39 +452,9 @@ class FileFormat(object):
         unit is new one.
         '''
         if self.has_template:
-            # Need to create new unit based on template
-            template_ttkit_unit = self.template_store.findid(context)
-            # We search by ID when using template
-            ttkit_unit = self.store.findid(context)
-            # We always need new unit to translate
-            if ttkit_unit is None:
-                ttkit_unit = template_ttkit_unit
-                if template_ttkit_unit is None:
-                    raise Exception(
-                        'Could not find template unit for new unit!'
-                    )
-                add = True
-            else:
-                add = False
-
-            return (FileUnit(ttkit_unit, template_ttkit_unit), add)
+            return self._find_unit_template(context, source)
         else:
-            # Find all units with same source
-            found_units = self.store.findunits(source)
-            # Find is broken for propfile, ignore results
-            if len(found_units) > 0 and not isinstance(self.store, propfile):
-                for ttkit_unit in found_units:
-                    # Does context match?
-                    if ttkit_unit.getcontext() == context:
-                        return (FileUnit(ttkit_unit), False)
-            else:
-                # Fallback to manual find for value based files
-                for ttkit_unit in self.store.units:
-                    ttkit_unit = FileUnit(ttkit_unit)
-                    if ttkit_unit.get_source() == source:
-                        return (ttkit_unit, False)
-
-        return (None, False)
+            return self._find_unit_bilingual(context, source)
 
     def add_unit(self, ttkit_unit):
         '''
@@ -556,14 +581,21 @@ class FileFormat(object):
         return True
 
     @staticmethod
-    def get_language_filename(path, mask, code):
+    def get_language_code(code):
+        """
+        Does any possible formatting needed for language code.
+        """
+        return code
+
+    @classmethod
+    def get_language_filename(cls, path, mask, code):
         """
         Return full filename of a language file for given
-        path, filemaks and language code.
+        path, filemask and language code.
         """
         return os.path.join(
             path,
-            mask.replace('*', code)
+            mask.replace('*', cls.get_language_code(code))
         )
 
     @staticmethod
@@ -574,6 +606,7 @@ class FileFormat(object):
         raise ValueError('Not supported')
 
 
+@register_fileformat
 class AutoFormat(FileFormat):
     name = _('Automatic detection')
     format_id = 'auto'
@@ -585,9 +618,12 @@ class AutoFormat(FileFormat):
         '''
         return factory.getobject(storefile)
 
-register_fileformat(AutoFormat)
+    @classmethod
+    def get_class(cls):
+        return None
 
 
+@register_fileformat
 class PoFormat(FileFormat):
     name = _('Gettext PO file')
     format_id = 'po'
@@ -608,7 +644,9 @@ class PoFormat(FileFormat):
                 mounit.source = ""
             else:
                 mounit.source = unit.source
-                mounit.msgctxt = [unit.getcontext()]
+                context = unit.getcontext()
+                if context:
+                    mounit.msgctxt = [context]
             mounit.target = unit.target
             outputfile.addunit(mounit)
         return str(outputfile)
@@ -640,7 +678,7 @@ class PoFormat(FileFormat):
                     stderr=subprocess.STDOUT,
                 )
                 cls.msginit_found = (ret == 0)
-            except:
+            except subprocess.CalledProcessError:
                 cls.msginit_found = False
         return cls.msginit_found
 
@@ -652,7 +690,7 @@ class PoFormat(FileFormat):
         try:
             pofile.parsefile(base)
             return True
-        except:
+        except Exception:
             return False
 
     @staticmethod
@@ -672,42 +710,44 @@ class PoFormat(FileFormat):
             stderr=subprocess.STDOUT,
         )
 
-register_fileformat(PoFormat)
 
-
+@register_fileformat
 class PoMonoFormat(PoFormat):
     name = _('Gettext PO file (monolingual)')
     format_id = 'po-mono'
     loader = ('po', 'pofile')
     monolingual = True
 
-register_fileformat(PoMonoFormat)
 
-
+@register_fileformat
 class TSFormat(FileFormat):
     name = _('Qt Linguist Translation File')
     format_id = 'ts'
     loader = ('ts2', 'tsfile')
 
-register_fileformat(TSFormat)
 
-
+@register_fileformat
 class XliffFormat(FileFormat):
     name = _('XLIFF Translation File')
     format_id = 'xliff'
     loader = ('xliff', 'xlifffile')
 
-register_fileformat(XliffFormat)
 
-
+@register_fileformat
 class StringsFormat(FileFormat):
     name = _('OS X Strings')
     format_id = 'strings'
     loader = ('properties', 'stringsfile')
 
-register_fileformat(StringsFormat)
+
+@register_fileformat
+class StringsUtf8Format(FileFormat):
+    name = _('OS X Strings (UTF-8)')
+    format_id = 'strings-utf8'
+    loader = ('properties', 'stringsutf8file')
 
 
+@register_fileformat
 class PropertiesFormat(FileFormat):
     name = _('Java Properties')
     format_id = 'properties'
@@ -723,26 +763,23 @@ class PropertiesFormat(FileFormat):
         store.encoding = 'iso-8859-1'
         return store
 
-register_fileformat(PropertiesFormat)
 
-
+@register_fileformat
 class PropertiesUtf8Format(FileFormat):
     name = _('Java Properties (UTF-8)')
     format_id = 'properties-utf8'
     loader = ('properties', 'javautf8file')
     monolingual = True
 
-register_fileformat(PropertiesUtf8Format)
 
-
+@register_fileformat
 class PhpFormat(FileFormat):
     name = _('PHP strings')
     format_id = 'php'
     loader = ('php', 'phpfile')
 
-register_fileformat(PhpFormat)
 
-
+@register_fileformat
 class AndroidFormat(FileFormat):
     name = _('Android String Resource')
     format_id = 'aresource'
@@ -759,15 +796,11 @@ class AndroidFormat(FileFormat):
         return True
 
     @staticmethod
-    def get_language_filename(path, mask, code):
+    def get_language_code(code):
         """
-        Return full filename of a language file for given
-        path, filemaks and language code.
+        Does any possible formatting needed for language code.
         """
-        return os.path.join(
-            path,
-            mask.replace('*', code.replace('_', '-r'))
-        )
+        return code.replace('_', '-r')
 
     @staticmethod
     def add_language(filename, code, base):
@@ -778,6 +811,14 @@ class AndroidFormat(FileFormat):
             output.write('''<?xml version="1.0" encoding="utf-8"?>
 <resources></resources>''')
 
-register_fileformat(AndroidFormat)
 
-FILE_FORMAT_CHOICES = [(fmt, FILE_FORMATS[fmt].name) for fmt in FILE_FORMATS]
+@register_fileformat
+class JSONFormat(FileFormat):
+    name = _('JSON file')
+    format_id = 'json'
+    loader = ('jsonl10n', 'JsonFile')
+
+
+FILE_FORMAT_CHOICES = [
+    (fmt, FILE_FORMATS[fmt].name) for fmt in sorted(FILE_FORMATS)
+]

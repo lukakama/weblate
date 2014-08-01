@@ -389,7 +389,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             path = self.get_path()
             try:
                 self._git_repo = git.Repo(path)
-            except:
+            except Exception:
                 # Fallback to initializing the repository
                 self._git_repo = git.Repo.init(path)
 
@@ -985,6 +985,12 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         if self.id:
             old = SubProject.objects.get(pk=self.id)
             self.check_rename(old)
+
+        # Check file format
+        if self.file_format not in FILE_FORMATS:
+            raise ValidationError(
+                _('Unsupported file format: {0}').format(self.file_format)
+            )
 
         # Validate git repo
         try:

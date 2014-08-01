@@ -27,7 +27,6 @@ from django.utils.translation import ugettext as _, ungettext, ugettext_lazy
 from django.utils.formats import date_format
 from django.utils import timezone
 from django import template
-from weblate import appsettings
 
 import re
 
@@ -183,15 +182,6 @@ def fmtsourcediff(value, other):
     return fmttranslation(other.source, diff=value)
 
 
-@register.filter
-@stringfilter
-def site_title(value):
-    '''
-    Returns site title
-    '''
-    return appsettings.SITE_TITLE
-
-
 @register.simple_tag
 def check_name(check):
     '''
@@ -199,7 +189,7 @@ def check_name(check):
     '''
     try:
         return CHECKS[check].name
-    except:
+    except KeyError:
         return check
 
 
@@ -210,7 +200,7 @@ def check_description(check):
     '''
     try:
         return CHECKS[check].description
-    except:
+    except KeyError:
         return check
 
 

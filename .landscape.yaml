@@ -4,4 +4,6 @@ uses:
   - django
 autodetect: yes
 ignore-paths:
-    - docs
+  - docs
+  - south_migrations
+  - weblate/trans/tests/__init__.py

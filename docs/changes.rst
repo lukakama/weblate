@@ -2,13 +2,16 @@ Changes
 =======
 
 weblate 1.10
------------
+------------
 
 Released on ? 2014.
 
 * Documentation improvements.
 * Added whiteboard for site wide messages.
 * Configurable strings priority.
+* Added support for JSON file format.
+* Fixed generating mo files in certain cases.
+* Added support for GitLab notifications.
 
 weblate 1.9
 -----------

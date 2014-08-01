@@ -9,7 +9,7 @@ Requirements
 ------------
 
 Python (2.7)
-    http://www.python.org/
+    https://www.python.org/
 Django (>= 1.5) (Django 1.6 is supported since Weblate 1.9)
     https://www.djangoproject.com/
 Translate-toolkit (>= 1.9.0, 1.10.0 or newer strongly recommended)
@@ -23,10 +23,10 @@ python-social-auth (>= 0.1.17, < 0.1.24)
 Whoosh (>= 2.5, 2.5.2 is recommended)
     http://bitbucket.org/mchaput/whoosh/
 PIL or Pillow library
-    http://python-imaging.github.io/
+    https://python-pillow.github.io/
 lxml (>= 3.1.0)
     http://lxml.de/
-South (>= 0.7.5)
+South (>= 1.0)
     http://south.aeracode.org/
 libravatar (optional for federated avatar support)
     https://pypi.python.org/pypi/pyLibravatar
@@ -98,20 +98,20 @@ Most requirements can be also installed using pip installer:
 
     pip install -r requirements.txt
 
-Also you will need header files for ``python-dev``, ``libxml2`` and ``libxslt``
-to compile some of the required Python modules.
+Also you will need header files for ``python-dev``, ``libxml2``, ``libxslt``
+and ``libfreetype6`` to compile some of the required Python modules.
 
 On Debian or Ubuntu you can install them using:
 
 .. code-block:: sh
 
-    apt-get install libxml2-dev libxslt-dev python-dev
+    apt-get install libxml2-dev libxslt-dev libfreetype6-dev python-dev
 
 On openSUSE or SLES you can install them using:
 
 .. code-block:: sh
 
-    zypper install libxslt-devel libxml2-devel python-devel
+    zypper install libxslt-devel libxml2-devel freetype-devel python-devel
 
 .. _file-permissions:
 
@@ -173,7 +173,10 @@ options:
 
             CREATE DATABASE <dbname> CHARACTER SET utf8;
 
-    .. seealso:: https://docs.djangoproject.com/en/1.6/ref/settings/#databases, https://docs.djangoproject.com/en/1.4/ref/databases/
+    .. seealso:: 
+        
+        https://docs.djangoproject.com/en/1.6/ref/settings/#databases, 
+        https://docs.djangoproject.com/en/1.6/ref/databases/
 
 ``DEBUG``
 
