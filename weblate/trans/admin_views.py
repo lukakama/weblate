@@ -29,6 +29,7 @@ from weblate import settings_example
 from weblate import appsettings
 from weblate.accounts.avatar import HAS_LIBRAVATAR
 from weblate.accounts.forms import HAS_ICU
+from weblate.trans.util import get_configuration_errors
 import weblate
 import django
 
@@ -96,19 +97,19 @@ def performance(request):
         'production-indexing',
     ))
     # Check for sane caching
-    cache = settings.CACHES['default']['BACKEND'].split('.')[-1]
-    if cache in ['MemcachedCache', 'DatabaseCache']:
+    caches = settings.CACHES['default']['BACKEND'].split('.')[-1]
+    if caches in ['MemcachedCache', 'DatabaseCache']:
         # We consider these good
-        cache = True
-    elif cache in ['DummyCache']:
+        caches = True
+    elif caches in ['DummyCache']:
         # This one is definitely bad
-        cache = False
+        caches = False
     else:
         # These might not be that bad
-        cache = None
+        caches = None
     checks.append((
         _('Django caching'),
-        cache,
+        caches,
         'production-cache',
     ))
     # Avatar caching
@@ -164,6 +165,13 @@ def performance(request):
         'production-home'
     ))
 
+    # Cached template loader
+    checks.append((
+        _('Cached template loader'),
+        'cached.Loader' in settings.TEMPLATE_LOADERS[0][0],
+        'production-templates'
+    ))
+
     # Check for serving static files
     # This uses CSS magic to hide this check when CSS is properly loaded.
     checks.append((
@@ -172,11 +180,13 @@ def performance(request):
         'production-admin-files',
         'order-cell',
     ))
+
     return render(
         request,
         "admin/performance.html",
         {
             'checks': checks,
+            'errors': get_configuration_errors()
         }
     )
 
@@ -323,6 +333,13 @@ def ssh(request):
         can_generate = (ret == 0 and not os.path.exists(RSA_KEY_FILE))
     except subprocess.CalledProcessError:
         can_generate = False
+
+    if not os.access(os.path.expanduser('~'), os.W_OK):
+        can_generate = False
+        messages.error(
+            request,
+            _('Can not write to home directory, please check documentation.')
+        )
 
     # Grab action type
     action = request.POST.get('action', None)

@@ -216,6 +216,14 @@ def perform_suggestion(unit, form, request):
         )
         # Stay on same entry
         return False
+    elif not unit.translation.subproject.enable_suggestions:
+        # Need privilege to add
+        messages.error(
+            request,
+            _('Suggestions are not allowed on this translation!')
+        )
+        # Stay on same entry
+        return False
     # Invite user to become translator if there is nobody else
     recent_changes = Change.objects.content(True).filter(
         translation=unit.translation,
@@ -570,7 +578,7 @@ def translate(request, project, subproject, lang):
 
     # Show secondary languages for logged in users
     if request.user.is_authenticated():
-        secondary = request.user.profile.get_secondary_units(unit)
+        secondary = unit.get_secondary_units(request.user)
     else:
         secondary = None
 

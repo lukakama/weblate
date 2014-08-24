@@ -18,25 +18,31 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+__all__ = [
+    'Project', 'SubProject', 'Translation', 'Unit', 'Check', 'Suggestion',
+    'Comment', 'Vote', 'IndexUpdate', 'Change', 'Dictionary', 'Source',
+    'Advertisement', 'WhiteboardMessage',
+]
+
 import os
 import shutil
 
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
-from weblate.trans.models.project import Project  # noqa
-from weblate.trans.models.subproject import SubProject  # noqa
-from weblate.trans.models.translation import Translation  # noqa
-from weblate.trans.models.unit import Unit  # noqa
-from weblate.trans.models.unitdata import (  # noqa
+from weblate.trans.models.project import Project
+from weblate.trans.models.subproject import SubProject
+from weblate.trans.models.translation import Translation
+from weblate.trans.models.unit import Unit
+from weblate.trans.models.unitdata import (
     Check, Suggestion, Comment, Vote
 )
-from weblate.trans.models.search import IndexUpdate  # noqa
-from weblate.trans.models.changes import Change  # noqa
-from weblate.trans.models.dictionary import Dictionary  # noqa
-from weblate.trans.models.source import Source  # noqa
-from weblate.trans.models.advertisement import Advertisement  # noqa
-from weblate.trans.models.whiteboard import WhiteboardMessage  # noqa
+from weblate.trans.models.search import IndexUpdate
+from weblate.trans.models.changes import Change
+from weblate.trans.models.dictionary import Dictionary
+from weblate.trans.models.source import Source
+from weblate.trans.models.advertisement import Advertisement
+from weblate.trans.models.whiteboard import WhiteboardMessage
 
 
 @receiver(post_delete, sender=Project)
@@ -57,7 +63,7 @@ def delete_object_dir(sender, instance, **kwargs):
 
 
 @receiver(post_save, sender=Source)
-def update_string_pririties(sender, instance, created=False, **kwargs):
+def update_string_pririties(sender, instance, **kwargs):
     """
     Updates unit score
     """
@@ -68,3 +74,56 @@ def update_string_pririties(sender, instance, created=False, **kwargs):
             priority=instance.priority
         )
         units.update(priority=instance.priority)
+
+
+def get_related_units(unitdata):
+    '''
+    Returns queryset with related units.
+    '''
+    related_units = Unit.objects.filter(
+        contentsum=unitdata.contentsum,
+        translation__subproject__project=unitdata.project,
+    )
+    if unitdata.language is not None:
+        related_units = related_units.filter(
+            translation__language=unitdata.language
+        )
+    return related_units
+
+
+@receiver(post_save, sender=Check)
+def update_failed_check_flag(sender, instance, **kwargs):
+    """
+    Update related unit failed check flag.
+    """
+    if instance.ignore:
+        for unit in get_related_units(instance):
+            unit.update_has_failing_check(False)
+
+
+@receiver(post_delete, sender=Comment)
+@receiver(post_save, sender=Comment)
+def update_comment_flag(sender, instance, **kwargs):
+    """
+    Update related unit comment flags
+    """
+    for unit in get_related_units(instance):
+        # Update unit stats
+        unit.update_has_comment()
+
+        # Invalidate counts cache
+        if instance.language is None:
+            unit.translation.invalidate_cache('sourcecomments')
+        else:
+            unit.translation.invalidate_cache('targetcomments')
+
+
+@receiver(post_delete, sender=Suggestion)
+@receiver(post_save, sender=Suggestion)
+def update_suggestion_flag(sender, instance, **kwargs):
+    """
+    Update related unit suggestion flags
+    """
+    for unit in get_related_units(instance):
+        # Update unit stats
+        unit.update_has_suggestion()

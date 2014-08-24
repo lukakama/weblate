@@ -39,13 +39,16 @@ from weblate import appsettings
 from weblate.lang.models import Language
 from weblate.trans.formats import AutoFormat
 from weblate.trans.checks import CHECKS
-from weblate.trans.models.project import Project
+from weblate.trans.models.unit import Unit
+from weblate.trans.models.unitdata import Check, Suggestion, Comment
 from weblate.trans.util import (
-    get_site_url, sleep_while_git_locked, translation_percent
+    get_site_url, sleep_while_git_locked, translation_percent, split_plural,
 )
 from weblate.accounts.avatar import get_user_display
 from weblate.trans.mixins import URLMixin, PercentMixin
 from weblate.trans.boolean_sum import BooleanSum
+from weblate.accounts.models import notify_new_string
+from weblate.trans.models.changes import Change
 
 
 class TranslationManager(models.Manager):
@@ -71,15 +74,6 @@ class TranslationManager(models.Manager):
         Filters enabled translations.
         '''
         return self.filter(enabled=True).select_related()
-
-    def all_acl(self, user):
-        '''
-        Returns list of projects user is allowed to access.
-        '''
-        projects, filtered = Project.objects.get_acl_status(user)
-        if not filtered:
-            return self.all()
-        return self.filter(subproject__project__in=projects)
 
     def get_percents(self, project=None, subproject=None, language=None):
         '''
@@ -410,7 +404,8 @@ class Translation(models.Model, URLMixin, PercentMixin):
         '''
         return self.subproject.file_format_cls(
             self.get_filename(),
-            self.subproject.template_store
+            self.subproject.template_store,
+            language_code=self.language_code
         )
 
     def supports_language_pack(self):
@@ -444,8 +439,6 @@ class Translation(models.Model, URLMixin, PercentMixin):
         '''
         Removes stale checks/comments/suggestions for deleted units.
         '''
-        from weblate.trans.models.unit import Unit
-        from weblate.trans.models.unitdata import Check, Suggestion, Comment
         for contentsum in deleted_contentsums:
             units = Unit.objects.filter(
                 translation__language=self.language,
@@ -500,8 +493,6 @@ class Translation(models.Model, URLMixin, PercentMixin):
         '''
         Checks whether database is in sync with git and possibly does update.
         '''
-        from weblate.trans.models.unit import Unit
-        from weblate.trans.models.changes import Change
 
         if change is None:
             change = Change.ACTION_UPDATE
@@ -605,7 +596,6 @@ class Translation(models.Model, URLMixin, PercentMixin):
 
         # Notify subscribed users
         if was_new:
-            from weblate.accounts.models import notify_new_string
             notify_new_string(self)
 
     @property
@@ -726,10 +716,11 @@ class Translation(models.Model, URLMixin, PercentMixin):
         '''
         Returns last autor of change done in Weblate.
         '''
-        from weblate.trans.models.changes import Change
         try:
-            change = Change.objects.content().filter(translation=self)[0]
-            return self.get_author_name(change.author, email)
+            return self.get_author_name(
+                self.change_set.content()[0].author,
+                email
+            )
         except IndexError:
             return None
 
@@ -737,10 +728,8 @@ class Translation(models.Model, URLMixin, PercentMixin):
         '''
         Returns date of last change done in Weblate.
         '''
-        from weblate.trans.models.changes import Change
         try:
-            change = Change.objects.content().filter(translation=self)[0]
-            return change.timestamp
+            return self.change_set.content()[0].timestamp
         except IndexError:
             return None
 
@@ -1118,13 +1107,37 @@ class Translation(models.Model, URLMixin, PercentMixin):
 
         return result
 
+    def merge_translations(self, request, author, store2, overwrite,
+                           add_fuzzy):
+        """
+        Merges translation unit wise, needed for template based translations to
+        add new strings.
+        """
+
+        for unit2 in store2.all_units():
+            # No translated -> skip
+            if not unit2.is_translated() or unit2.unit.isheader():
+                continue
+
+            try:
+                unit = self.unit_set.get(
+                    source=unit2.get_source(),
+                    context=unit2.get_context(),
+                )
+            except Unit.DoesNotExist:
+                continue
+
+            unit.translate(
+                request,
+                split_plural(unit2.get_target()),
+                add_fuzzy or unit2.is_fuzzy()
+            )
+
     def merge_store(self, request, author, store2, overwrite, merge_header,
                     add_fuzzy):
         '''
         Merges translate-toolkit store into current translation.
         '''
-        from weblate.trans.models.changes import Change
-
         # Merge with lock acquired
         with self.subproject.git_lock:
 
@@ -1174,10 +1187,8 @@ class Translation(models.Model, URLMixin, PercentMixin):
 
     def merge_suggestions(self, request, store):
         '''
-        Merges contect of translate-toolkit store as a suggestions.
+        Merges content of translate-toolkit store as a suggestions.
         '''
-        from weblate.trans.models.unitdata import Suggestion
-        from weblate.trans.models.unit import Unit
         ret = False
         for unit in store.all_units():
 
@@ -1240,15 +1251,26 @@ class Translation(models.Model, URLMixin, PercentMixin):
 
         if method in ('', 'fuzzy'):
             # Do actual merge
-            for translation in translations:
-                ret |= translation.merge_store(
+            if self.subproject.has_template():
+                # Merge on units level
+                self.merge_translations(
                     request,
                     author,
                     store,
                     overwrite,
-                    merge_header,
                     (method == 'fuzzy')
                 )
+            else:
+                # Merge on file level
+                for translation in translations:
+                    ret |= translation.merge_store(
+                        request,
+                        author,
+                        store,
+                        overwrite,
+                        merge_header,
+                        (method == 'fuzzy')
+                    )
         else:
             # Add as sugestions
             ret = self.merge_suggestions(request, store)
