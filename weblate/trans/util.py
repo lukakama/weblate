@@ -20,10 +20,10 @@
 
 from django.core.exceptions import ImproperlyConfigured
 from django.contrib.sites.models import Site
+from django.core.cache import cache
 from importlib import import_module
 import time
 import random
-import os.path
 
 PLURAL_SEPARATOR = '\x1e\x1e'
 
@@ -104,14 +104,6 @@ def load_class(name):
     return cls
 
 
-def get_script_name(name):
-    '''
-    Returns script name from string possibly containing full path and
-    parameters.
-    '''
-    return os.path.basename(name).split()[0]
-
-
 def get_distinct_translations(units):
     '''
     Returns list of distinct translations. It should be possible to use
@@ -133,3 +125,22 @@ def translation_percent(translated, total):
     Returns translation percentage.
     '''
     return (1000 * translated / total) / 10.0
+
+
+def add_configuration_error(name, message):
+    """
+    Logs configuration error.
+    """
+    errors = cache.get('configuration-errors', [])
+    errors.append({
+        'name': name,
+        'message': message,
+    })
+    cache.set('configuration-errors', errors)
+
+
+def get_configuration_errors():
+    """
+    Returns all configuration errors.
+    """
+    return cache.get('configuration-errors', [])

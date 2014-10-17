@@ -28,9 +28,9 @@ URL_DONATE = 'http://weblate.org/donate/?utm_source=weblate&utm_term=%s'
 
 
 def weblate_context(request):
-    '''
+    """
     Context processor to inject various useful variables into context.
-    '''
+    """
     if 'next' in request.GET:
         login_redirect_url = request.GET['next']
     else:
@@ -48,6 +48,7 @@ def weblate_context(request):
         'offer_hosting': appsettings.OFFER_HOSTING,
         'demo_server': appsettings.DEMO_SERVER,
         'enable_avatars': appsettings.ENABLE_AVATARS,
+        'enable_sharing': appsettings.ENABLE_SHARING,
 
         'current_date': datetime.utcnow().strftime('%Y-%m-%d'),
         'current_year': datetime.utcnow().strftime('%Y'),
@@ -57,6 +58,7 @@ def weblate_context(request):
 
         'mt_enabled': appsettings.MACHINE_TRANSLATION_ENABLED,
         'hooks_enabled': appsettings.ENABLE_HOOKS,
+        'whiteboard_enabled': appsettings.ENABLE_WHITEBOARD,
 
         'registration_open': appsettings.REGISTRATION_OPEN,
     }

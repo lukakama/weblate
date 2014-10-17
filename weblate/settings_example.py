@@ -30,7 +30,7 @@ if django.VERSION < (1, 4, 0):
     )
 
 #
-# Django settings for weblate project.
+# Django settings for Weblate project.
 #
 
 import os
@@ -53,12 +53,14 @@ DATABASES = {
         'NAME': 'weblate.db',
         # Database user, not used with sqlite3.
         'USER': 'weblate',
-        # Database pasword, not used with sqlite3.
+        # Database password, not used with sqlite3.
         'PASSWORD': 'weblate',
         # Set to empty string for localhost. Not used with sqlite3.
         'HOST': '127.0.0.1',
         # Set to empty string for default. Not used with sqlite3.
         'PORT': '',
+        # We want transactions on SQLite
+        'ATOMIC_REQUESTS': True,
     }
 }
 
@@ -78,6 +80,7 @@ TIME_ZONE = 'Europe/Prague'
 LANGUAGE_CODE = 'en-us'
 
 LANGUAGES = (
+    ('az', u'Azərbaycan'),
     ('be', u'Беларуская'),
     ('br', u'Brezhoneg'),
     ('ca', u'Català'),
@@ -95,6 +98,7 @@ LANGUAGES = (
     ('id', 'Indonesia'),
     ('ja', u'日本語'),
     ('ko', u'한국어'),
+    ('ksh', u'Kölsch'),
     ('nl', u'Nederlands'),
     ('pl', u'Polski'),
     ('pt', u'Português'),
@@ -127,7 +131,7 @@ URL_PREFIX = ''
 
 # Absolute filesystem path to the directory that will hold user-uploaded files.
 # Example: "/home/media/media.lawrence.com/media/"
-MEDIA_ROOT = '%s/media/' % WEB_ROOT
+MEDIA_ROOT = os.path.join(WEB_ROOT, 'media')
 
 # URL that handles the media served from MEDIA_ROOT. Make sure to use a
 # trailing slash.
@@ -163,8 +167,10 @@ SECRET_KEY = 'jm8fqjlg+5!#xu%e-oh#7!$aa7!6avf7ud*_v=chdrb9qdco6('
 
 # List of callables that know how to import templates from various sources.
 TEMPLATE_LOADERS = (
-    'django.template.loaders.filesystem.Loader',
-    'django.template.loaders.app_directories.Loader',
+    ('django.template.loaders.cached.Loader', (
+        'django.template.loaders.filesystem.Loader',
+        'django.template.loaders.app_directories.Loader',
+    )),
 )
 
 # Authentication configuration
@@ -226,7 +232,7 @@ TEMPLATE_DIRS = (
     # or "C:/www/django/templates".
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
-    '%s/html/' % WEB_ROOT,
+    os.path.join(WEB_ROOT, 'html'),
 )
 
 INSTALLED_APPS = (
@@ -248,7 +254,7 @@ INSTALLED_APPS = (
     'weblate',
 )
 
-LOCALE_PATHS = ('%s/../locale' % WEB_ROOT, )
+LOCALE_PATHS = (os.path.join(WEB_ROOT, '..', 'locale'), )
 
 
 TEMPLATE_CONTEXT_PROCESSORS = (
@@ -376,7 +382,7 @@ MT_GOOGLE_KEY = None
 MT_TMSERVER = None
 
 # Path where git repositories are stored, it needs to be writable
-GIT_ROOT = '%s/repos/' % WEB_ROOT
+GIT_ROOT = os.path.join(WEB_ROOT, 'repos')
 
 # Title of site to use
 SITE_TITLE = 'Weblate'
@@ -517,3 +523,9 @@ ALLOWED_HOSTS = []
 #    r'/data/(.*)$',     # Allowing public access to data exports
 #    r'/hooks/(.*)$',    # Allowing public access to notification hooks
 # )
+
+# Enable whiteboard functionality - under development so disabled by default.
+ENABLE_WHITEBOARD = False
+
+# Override home directory to some writable location
+# os.environ['HOME'] = os.path.join(WEB_ROOT, 'configuration')

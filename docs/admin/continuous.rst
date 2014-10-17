@@ -26,7 +26,7 @@ configuration to your :file:`.gitconfig`:
      driver = /path/to/weblate/examples/git-merge-gettext-po %O %A %B
 
 And enable it's use by defining proper attributes in given repository (eg. in
-:file:`.git/info/attribute`)::
+:file:`.git/info/attributes`)::
 
     *.po merge=merge-gettext-po
 
@@ -34,6 +34,45 @@ And enable it's use by defining proper attributes in given repository (eg. in
 
     This merge driver assumes the changes in POT files always are done in branch
     we're trying to merge.
+
+.. _github-setup:
+
+Automatically receiving changes from GitHub
++++++++++++++++++++++++++++++++++++++++++++
+
+Weblate comes with native support for GitHub. To receive notifications on every
+push to GitHub repository, you just need to enable Weblate Service in the
+repository settings as shown on the image below:
+
+.. image:: ../images/github-settings.png
+
+The set the base URL of your Weblate installation (for example
+``https://hosted.weblate.org``) and Weblate will be notified about every push
+to GitHub repository.
+
+.. seealso:: :http:post:`/hooks/github/`
+
+.. _bitbucket-setup:
+
+Automatically receiving changes from Bitbucket
+++++++++++++++++++++++++++++++++++++++++++++++
+
+Weblate has support for Bitbucket hooks, all you need to do is add POST hook
+with destination to ``/hooks/bitbucket/`` URL on your Weblate installation
+(for example ``https://hosted.weblate.org/hooks/bitbucket/``).
+
+.. seealso:: :http:post:`/hooks/bitbucket/`
+
+.. _gitlab-setup:
+
+Automatically receiving changes from GitLab
++++++++++++++++++++++++++++++++++++++++++++
+
+Weblate has support for GitLab hooks, all you need to do is add project web hook
+with destination to ``/hooks/gitlab/`` URL on your Weblate installation
+(for example ``https://hosted.weblate.org/hooks/gitlab/``).
+
+.. seealso:: :http:post:`/hooks/gitlab/`
 
 .. _push-changes:
 
@@ -43,9 +82,9 @@ Pushing changes
 Each project can have configured push URL and in such case Weblate offers
 button to push changes to remote repository in web interface.
 
-I case you will use SSH for pushing, you need to have key without passphrase
+If you are using SSH to push, you will need to have a key without a passphrase
 (or use ssh-agent for Django) and the remote server needs to be verified by you
-first, otherwise push will fail.
+via the admin interface first, otherwise pushing will fail.
 
 .. note::
 

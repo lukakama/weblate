@@ -9,7 +9,7 @@
 </p>
 
 <p>
-{% blocktrans with site|site_title as site_title %}there is a new suggestion to evaluate on {{ translation }} at {{ site_title }}.{% endblocktrans %}
+{% blocktrans %}there is a new suggestion to evaluate on {{ translation }} at {{ site_title }}.{% endblocktrans %}
 <p>
 
 <table>
@@ -52,7 +52,7 @@
 </p>
 
 <p>
-<a href="{{ current_site_url }}{{ suggestion.get_review_url }}">{{ current_site_url }}{{ suggestion.get_review_url }}</a>
+<a href="{{ current_site_url }}{{ unit.get_absolute_url }}">{{ current_site_url }}{{ unit.get_absolute_url }}</a>
 </p>
 
 {% include "mail/footer.html" %}

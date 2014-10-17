@@ -22,20 +22,24 @@
 Tests for translation views.
 """
 
+import re
+import time
+from urlparse import urlsplit
+from cStringIO import StringIO
+
 from django.test.client import RequestFactory
 from django.contrib.auth.models import User
 from django.core.urlresolvers import reverse
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core import mail
+from PIL import Image
+
+from weblate import appsettings
+from weblate.trans.models.whiteboard import WhiteboardMessage
 from weblate.trans.models.changes import Change
 from weblate.trans.models.unitdata import Suggestion
 from weblate.trans.tests.test_models import RepoTestCase
 from weblate.accounts.models import Profile
-from PIL import Image
-import re
-import time
-from urlparse import urlsplit
-from cStringIO import StringIO
 
 
 class ViewTestCase(RepoTestCase):
@@ -266,12 +270,6 @@ class AndroidNewLangTest(NewLangTest):
 
 
 class BasicViewTest(ViewTestCase):
-    def test_view_home(self):
-        response = self.client.get(
-            reverse('home')
-        )
-        self.assertContains(response, 'Test/Test')
-
     def test_view_project(self):
         response = self.client.get(
             reverse('project', kwargs=self.kw_project)
@@ -323,6 +321,11 @@ class BasicPoMonoViewTest(BasicViewTest):
 class BasicIphoneViewTest(BasicViewTest):
     def create_subproject(self):
         return self.create_iphone()
+
+
+class BasicJSONViewTest(BasicViewTest):
+    def create_subproject(self):
+        return self.create_json()
 
 
 class BasicJavaViewTest(BasicViewTest):
@@ -440,8 +443,8 @@ class EditTest(ViewTestCase):
             {'checksum': unit.checksum, 'merge': unit.id}
         )
         self.assertBackend(1)
-        # We should get to second message
-        self.assertRedirectsOffset(response, self.translate_url, 1)
+        # We should stay on same message
+        self.assertRedirectsOffset(response, self.translate_url, unit.position)
 
         # Test error handling
         unit2 = self.translation.unit_set.get(
@@ -666,6 +669,13 @@ class EditIphoneTest(EditTest):
 
     def create_subproject(self):
         return self.create_iphone()
+
+
+class EditJSONTest(EditTest):
+    has_plurals = False
+
+    def create_subproject(self):
+        return self.create_json()
 
 
 class EditJavaTest(EditTest):
@@ -1231,3 +1241,27 @@ class ZenViewTest(ViewTestCase):
             response,
             'You have reached end of translating.'
         )
+
+
+class HomeViewTest(ViewTestCase):
+    """Tests for home/inidex view."""
+    def test_view_home(self):
+        response = self.client.get(reverse('home'))
+        self.assertContains(response, 'Test/Test')
+
+    def test_home_with_whiteboard(self):
+        # @override_settings decorator does not work becase
+        # appsettings.ENABLE_WHITEBOARD is just a constant that is being
+        # assigned during first import
+        appsettings.ENABLE_WHITEBOARD = True
+        msg = WhiteboardMessage(message='test_message')
+        msg.save()
+
+        response = self.client.get(reverse('home'))
+        self.assertContains(response, 'Whiteboard')
+        self.assertContains(response, 'test_message')
+
+    def test_home_without_whiteboard(self):
+        appsettings.ENABLE_WHITEBOARD = False
+        response = self.client.get(reverse('home'))
+        self.assertNotContains(response, 'Whiteboard')

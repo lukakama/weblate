@@ -32,7 +32,7 @@ from weblate.sitemaps import SITEMAPS
 import weblate.accounts.urls
 
 # URL regexp for language code
-LANGUAGE = r'(?P<lang>[^/-]{2,3}([_-][A-Za-z]{2})?(@[a-z]+)?)'
+LANGUAGE = r'(?P<lang>[^/]+)'
 
 # URL regexp for project
 PROJECT = r'(?P<project>[^/]+)/'
@@ -131,13 +131,18 @@ urlpatterns = patterns(
     ),
     url(
         r'^projects/' + SUBPROJECT + 'source/$',
-        'weblate.trans.views.basic.show_source',
+        'weblate.trans.views.source.show_source',
         name='show_source',
     ),
     url(
         r'^projects/' + SUBPROJECT + 'source/review/$',
-        'weblate.trans.views.basic.review_source',
+        'weblate.trans.views.source.review_source',
         name='review_source',
+    ),
+    url(
+        r'^source/(?P<pk>[0-9]+)/priority/$',
+        'weblate.trans.views.source.edit_priority',
+        name='edit_priority'
     ),
 
     # Translation pages
@@ -440,6 +445,11 @@ urlpatterns = patterns(
         r'^hooks/github/$', 'weblate.trans.views.api.git_service_hook',
         {'service': 'github'},
         name='hook-github',
+    ),
+    url(
+        r'^hooks/gitlab/$', 'weblate.trans.views.api.git_service_hook',
+        {'service': 'gitlab'},
+        name='hook-gitlab',
     ),
     url(
         r'^hooks/bitbucket/$', 'weblate.trans.views.api.git_service_hook',

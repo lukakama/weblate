@@ -29,6 +29,7 @@ from weblate import settings_example
 from weblate import appsettings
 from weblate.accounts.avatar import HAS_LIBRAVATAR
 from weblate.accounts.forms import HAS_ICU
+from weblate.trans.util import get_configuration_errors
 import weblate
 import django
 
@@ -46,9 +47,9 @@ RSA_KEY_FILE = os.path.expanduser('~/.ssh/id_rsa.pub')
 
 @staff_member_required
 def report(request):
-    '''
+    """
     Provides report about git status of all repos.
-    '''
+    """
     return render(
         request,
         "admin/report.html",
@@ -60,9 +61,9 @@ def report(request):
 
 @staff_member_required
 def performance(request):
-    '''
+    """
     Shows performance tuning tips.
-    '''
+    """
     checks = []
     # Check for debug mode
     checks.append((
@@ -96,19 +97,19 @@ def performance(request):
         'production-indexing',
     ))
     # Check for sane caching
-    cache = settings.CACHES['default']['BACKEND'].split('.')[-1]
-    if cache in ['MemcachedCache', 'DatabaseCache']:
+    caches = settings.CACHES['default']['BACKEND'].split('.')[-1]
+    if caches in ['MemcachedCache', 'DatabaseCache']:
         # We consider these good
-        cache = True
-    elif cache in ['DummyCache']:
+        caches = True
+    elif caches in ['DummyCache']:
         # This one is definitely bad
-        cache = False
+        caches = False
     else:
         # These might not be that bad
-        cache = None
+        caches = None
     checks.append((
         _('Django caching'),
-        cache,
+        caches,
         'production-cache',
     ))
     # Avatar caching
@@ -164,6 +165,13 @@ def performance(request):
         'production-home'
     ))
 
+    # Cached template loader
+    checks.append((
+        _('Cached template loader'),
+        'cached.Loader' in settings.TEMPLATE_LOADERS[0][0],
+        'production-templates'
+    ))
+
     # Check for serving static files
     # This uses CSS magic to hide this check when CSS is properly loaded.
     checks.append((
@@ -172,19 +180,21 @@ def performance(request):
         'production-admin-files',
         'order-cell',
     ))
+
     return render(
         request,
         "admin/performance.html",
         {
             'checks': checks,
+            'errors': get_configuration_errors()
         }
     )
 
 
 def parse_hosts_line(line):
-    '''
+    """
     Parses single hosts line into tuple host, key fingerprint.
-    '''
+    """
     host, keytype, key = line.strip().split(None, 3)[:3]
     fp_plain = hashlib.md5(key.decode('base64')).hexdigest()
     fingerprint = ':'.join(
@@ -193,13 +203,13 @@ def parse_hosts_line(line):
     if host.startswith('|1|'):
         # Translators: placeholder SSH hashed hostname
         host = _('[hostname hashed]')
-    return (host, keytype, fingerprint)
+    return host, keytype, fingerprint
 
 
 def get_host_keys():
-    '''
+    """
     Returns list of host keys.
-    '''
+    """
     try:
         result = []
         with open(KNOWN_HOSTS_FILE, 'r') as handle:
@@ -213,12 +223,13 @@ def get_host_keys():
 
 
 def get_key_data():
-    '''
+    """
     Parses host key and returns it.
-    '''
+    """
     # Read key data if it exists
     if os.path.exists(RSA_KEY_FILE):
-        key_data = file(RSA_KEY_FILE).read()
+        with open(RSA_KEY_FILE) as handle:
+            key_data = handle.read()
         key_type, key_fingerprint, key_id = key_data.strip().split(None, 2)
         return {
             'key': key_data,
@@ -229,11 +240,89 @@ def get_key_data():
     return None
 
 
+def generate_ssh_key(request):
+    """
+    Generates SSH key.
+    """
+    # Create directory if it does not exist
+    key_dir = os.path.dirname(RSA_KEY_FILE)
+
+    # Try generating key
+    try:
+        if not os.path.exists(key_dir):
+            os.makedirs(key_dir)
+
+        subprocess.check_output(
+            [
+                'ssh-keygen', '-q',
+                '-N', '',
+                '-C', 'Weblate',
+                '-t', 'rsa',
+                '-f', RSA_KEY_FILE[:-4]
+            ],
+            stderr=subprocess.STDOUT,
+        )
+        messages.success(request, _('Created new SSH key.'))
+    except (subprocess.CalledProcessError, OSError) as exc:
+        messages.error(
+            request,
+            _('Failed to generate key: %s') %
+            getattr(exc, 'output', str(exc))
+        )
+
+
+def add_host_key(request):
+    """
+    Adds host key for a host.
+    """
+    host = request.POST.get('host', '')
+    port = request.POST.get('port', '')
+    if len(host) == 0:
+        messages.error(request, _('Invalid host name given!'))
+    else:
+        cmdline = ['ssh-keyscan']
+        if port:
+            cmdline.extend(['-p', port])
+        cmdline.append(host)
+        try:
+            output = subprocess.check_output(
+                cmdline,
+                stderr=subprocess.STDOUT,
+            )
+            keys = [
+                line
+                for line in output.splitlines()
+                if ' ssh-rsa ' in line or ' ecdsa-sha2-nistp256 ' in line
+            ]
+            for key in keys:
+                host, keytype, fingerprint = parse_hosts_line(key)
+                messages.warning(
+                    request,
+                    _(
+                        'Added host key for %(host)s with fingerprint '
+                        '%(fingerprint)s (%(keytype)s), '
+                        'please verify that it is correct.'
+                    ) % {
+                        'host': host,
+                        'fingerprint': fingerprint,
+                        'keytype': keytype,
+                    }
+                )
+            with open(KNOWN_HOSTS_FILE, 'a') as handle:
+                for key in keys:
+                    handle.write('%s\n' % key)
+        except (subprocess.CalledProcessError, OSError) as exc:
+            messages.error(
+                request,
+                _('Failed to get host key: %s') % exc.output
+            )
+
+
 @staff_member_required
 def ssh(request):
-    '''
+    """
     Show information and manipulate with SSH key.
-    '''
+    """
     # Check whether we can generate SSH key
     try:
         ret = subprocess.check_call(
@@ -242,86 +331,29 @@ def ssh(request):
             stderr=subprocess.STDOUT,
         )
         can_generate = (ret == 0 and not os.path.exists(RSA_KEY_FILE))
-    except:
+    except subprocess.CalledProcessError:
         can_generate = False
+
+    if not os.access(os.path.expanduser('~'), os.W_OK):
+        can_generate = False
+        messages.error(
+            request,
+            _('Can not write to home directory, please check documentation.')
+        )
 
     # Grab action type
     action = request.POST.get('action', None)
 
     # Generate key if it does not exist yet
     if can_generate and action == 'generate':
-        # Create directory if it does not exist
-        key_dir = os.path.dirname(RSA_KEY_FILE)
-
-        # Try generating key
-        try:
-            if not os.path.exists(key_dir):
-                os.makedirs(key_dir)
-
-            subprocess.check_output(
-                [
-                    'ssh-keygen', '-q',
-                    '-N', '',
-                    '-C', 'Weblate',
-                    '-t', 'rsa',
-                    '-f', RSA_KEY_FILE[:-4]
-                ],
-                stderr=subprocess.STDOUT,
-            )
-            messages.info(request, _('Created new SSH key.'))
-        except (subprocess.CalledProcessError, OSError) as exc:
-            messages.error(
-                request,
-                _('Failed to generate key: %s') %
-                getattr(exc, 'output', str(exc))
-            )
+        generate_ssh_key(request)
 
     # Read key data if it exists
     key = get_key_data()
 
     # Add host key
     if action == 'add-host':
-        host = request.POST.get('host', '')
-        port = request.POST.get('port', '')
-        if len(host) == 0:
-            messages.error(request, _('Invalid host name given!'))
-        else:
-            cmdline = ['ssh-keyscan']
-            if port:
-                cmdline.extend(['-p', port])
-            cmdline.append(host)
-            try:
-                output = subprocess.check_output(
-                    cmdline,
-                    stderr=subprocess.STDOUT,
-                )
-                keys = [
-                    line
-                    for line in output.splitlines()
-                    if ' ssh-rsa ' in line or ' ecdsa-sha2-nistp256 ' in line
-                ]
-                for key in keys:
-                    host, keytype, fingerprint = parse_hosts_line(key)
-                    messages.warning(
-                        request,
-                        _(
-                            'Added host key for %(host)s with fingerprint '
-                            '%(fingerprint)s (%(keytype)s), '
-                            'please verify that it is correct.'
-                        ) % {
-                            'host': host,
-                            'fingerprint': fingerprint,
-                            'keytype': keytype,
-                        }
-                    )
-                with open(KNOWN_HOSTS_FILE, 'a') as handle:
-                    for key in keys:
-                        handle.write('%s\n' % key)
-            except (subprocess.CalledProcessError, OSError) as exc:
-                messages.error(
-                    request,
-                    _('Failed to get host key: %s') % exc.output
-                )
+        add_host_key(request)
 
     return render(
         request,

@@ -19,7 +19,7 @@
 #
 
 import random
-from django.utils.translation import ugettext as _, ugettext_lazy
+from django.utils.translation import ugettext_lazy as _
 from django.db import models
 from django.utils import timezone
 from weblate import appsettings
@@ -29,6 +29,15 @@ GITTIP = 'https://www.gittip.com/nijel/'
 
 
 class AdvertisementManager(models.Manager):
+    _fallback_choices = (
+        (_('Donate to Weblate at {0}'), DONATE),
+        (_('Support Weblate at {0}'), GITTIP),
+    )
+    _fallback_choices_html = (
+        (_('Donate to Weblate'), DONATE),
+        (_('Support Weblate using GitTip'), GITTIP),
+    )
+
     def get_advertisement(self, placement):
         '''
         Returns random advertisement for given placement.
@@ -55,35 +64,22 @@ class AdvertisementManager(models.Manager):
         now = timezone.now()
 
         if placement == Advertisement.PLACEMENT_MAIL_TEXT:
-            text = random.choice([
-                _('Donate to Weblate at {0}').format(DONATE),
-                _('Support Weblate at {0}').format(GITTIP),
-            ])
-            return Advertisement(
-                date_start=now,
-                date_end=now,
-                placement=placement,
-                text=text
-            )
+            text, url = random.choice(self._fallback_choices)
+            text = text.format(url)
         elif placement == Advertisement.PLACEMENT_MAIL_HTML:
-            text = random.choice([
-                u'<a href="{0}">{1}</a>'.format(
-                    DONATE,
-                    _('Donate to Weblate'),
-                ),
-                u'<a href="{0}">{1}</a>'.format(
-                    GITTIP,
-                    _('Support Weblate using GitTip'),
-                ),
-            ])
-            return Advertisement(
-                date_start=now,
-                date_end=now,
-                placement=placement,
-                text=text
+            text, url = random.choice(self._fallback_choices_html)
+            text = u'<a href="{0}">{1}</a>'.format(
+                url, text
             )
+        else:
+            return None
 
-        return None
+        return Advertisement(
+            date_start=now,
+            date_end=now,
+            placement=placement,
+            text=text
+        )
 
 
 class Advertisement(models.Model):
@@ -91,29 +87,29 @@ class Advertisement(models.Model):
     PLACEMENT_MAIL_HTML = 2
 
     PLACEMENT_CHOICES = (
-        (PLACEMENT_MAIL_TEXT, ugettext_lazy('Mail footer (text)')),
-        (PLACEMENT_MAIL_HTML, ugettext_lazy('Mail footer (HTML)')),
+        (PLACEMENT_MAIL_TEXT, _('Mail footer (text)')),
+        (PLACEMENT_MAIL_HTML, _('Mail footer (HTML)')),
     )
 
     placement = models.IntegerField(
         choices=PLACEMENT_CHOICES,
-        verbose_name=ugettext_lazy('Placement'),
+        verbose_name=_('Placement'),
     )
     date_start = models.DateField(
-        verbose_name=ugettext_lazy('Start date'),
+        verbose_name=_('Start date'),
     )
     date_end = models.DateField(
-        verbose_name=ugettext_lazy('End date'),
+        verbose_name=_('End date'),
     )
     text = models.TextField(
-        verbose_name=ugettext_lazy('Text'),
-        help_text=ugettext_lazy(
+        verbose_name=_('Text'),
+        help_text=_(
             'Depending on placement, HTML can be allowed.'
         )
     )
     note = models.TextField(
-        verbose_name=ugettext_lazy('Note'),
-        help_text=ugettext_lazy(
+        verbose_name=_('Note'),
+        help_text=_(
             'Free form note for your notes, not used within Weblate.'
         ),
         blank=True
@@ -126,3 +122,6 @@ class Advertisement(models.Model):
         index_together = [
             ('placement', 'date_start', 'date_end'),
         ]
+
+    def __unicode__(self):
+        return self.text

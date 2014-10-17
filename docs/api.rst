@@ -11,17 +11,17 @@ Notification hooks
 Notification hooks allow external applications to notify Weblate that Git
 repository has been updated.
 
-.. describe:: GET /hooks/update/(string:project)/(string:subproject)/
+.. http:get:: /hooks/update/(string:project)/(string:subproject)/
 
    Triggers update of a subproject (pulling from Git and scanning for
    translation changes).
 
-.. describe:: GET /hooks/update/(string:project)/
+.. http:get:: /hooks/update/(string:project)/
 
    Triggers update of all subprojects in a project (pulling from Git and
    scanning for translation changes).
 
-.. describe:: POST /hooks/github/
+.. http:post:: /hooks/github/
 
     Special hook for handling GitHub notifications and automatically updating
     matching subprojects.
@@ -32,14 +32,34 @@ repository has been updated.
         Weblate service hook in repository settings and set URL to URL of your
         Weblate installation.
 
-    .. seealso:: http://help.github.com/post-receive-hooks/ :setting:`ENABLE_HOOKS`
+    .. seealso:: 
+       
+       :ref:`github-setup`
+       https://help.github.com/articles/creating-webhooks
+       :setting:`ENABLE_HOOKS`
 
-.. describe:: POST /hooks/bitbucket/
+.. http:post:: /hooks/gitlab/
+
+    Special hook for handling GitLab notifications and automatically updating
+    matching subprojects.
+
+    .. seealso:: 
+
+       :ref:`gitlab-setup`
+       http://doc.gitlab.com/ce/web_hooks/web_hooks.html
+       :setting:`ENABLE_HOOKS`
+
+.. http:post:: /hooks/bitbucket/
 
     Special hook for handling Bitbucket notifications and automatically
     updating matching subprojects.
 
-    .. seealso:: https://confluence.atlassian.com/display/BITBUCKET/POST+Service+Management https://confluence.atlassian.com/display/BITBUCKET/Writing+Brokers+for+Bitbucket :setting:`ENABLE_HOOKS`
+    .. seealso:: 
+
+       :ref:`bitbucket-setup`
+       https://confluence.atlassian.com/display/BITBUCKET/Write+brokers+%28hooks%29+for+Bitbucket
+       https://confluence.atlassian.com/display/BITBUCKET/POST+hook+management
+       :setting:`ENABLE_HOOKS`
 
 .. _exports:
 
@@ -48,7 +68,7 @@ Exports
 
 Weblate provides various exports to allow you further process the data.
 
-.. describe:: GET /exports/stats/(string:project)/(string:subproject)/
+.. http:get:: /exports/stats/(string:project)/(string:subproject)/
 
     Retrieves statistics for given subproject in JSON format.
 
@@ -70,8 +90,10 @@ Weblate provides various exports to allow you further process the data.
                 "last_change": "2012-03-28T15:07:38+00:00",
                 "name": "Czech", 
                 "total": 436, 
+                "total_words": 15271,
                 "translated": 436, 
                 "translated_percent": 100.0, 
+                "translated_words": 3201, 
                 "url": "http://l10n.cihar.com/engage/weblate/cs/"
                 "url_translate": "http://l10n.cihar.com/projects/weblate/master/cs/"
             }, 
@@ -85,8 +107,10 @@ Weblate provides various exports to allow you further process the data.
                 "last_change": null,
                 "name": "Dutch", 
                 "total": 436, 
+                "total_words": 15271,
                 "translated": 319, 
                 "translated_percent": 73.2, 
+                "translated_words": 3201, 
                 "url": "http://l10n.cihar.com/engage/weblate/nl/"
                 "url_translate": "http://l10n.cihar.com/projects/weblate/master/nl/"
             }, 
@@ -100,8 +124,10 @@ Weblate provides various exports to allow you further process the data.
                 "last_change": null,
                 "name": "Greek", 
                 "total": 436, 
+                "total_words": 15271,
                 "translated": 312, 
                 "translated_percent": 71.6, 
+                "translated_words": 3201, 
                 "url": "http://l10n.cihar.com/engage/weblate/el/"
                 "url_translate": "http://l10n.cihar.com/projects/weblate/master/el/"
             }, 
@@ -137,23 +163,23 @@ RSS feeds
 
 Changes in translations are exported in RSS feeds.
 
-.. describe:: GET /exports/rss/(string:project)/(string:subproject)/(string:language)/
+.. http:get:: /exports/rss/(string:project)/(string:subproject)/(string:language)/
 
     Retrieves RSS feed with recent changes for a translation.
 
-.. describe:: GET /exports/rss/(string:project)/(string:subproject)/
+.. http:get:: /exports/rss/(string:project)/(string:subproject)/
 
     Retrieves RSS feed with recent changes for a subproject.
 
-.. describe:: GET /exports/rss/(string:project)/
+.. http:get:: /exports/rss/(string:project)/
 
     Retrieves RSS feed with recent changes for a project.
 
-.. describe:: GET /exports/rss/language/(string:language)/
+.. http:get:: /exports/rss/language/(string:language)/
 
     Retrieves RSS feed with recent changes for a language.
 
-.. describe:: GET /exports/rss/
+.. http:get:: /exports/rss/
 
     Retrieves RSS feed with recent changes for Weblate instance.
 

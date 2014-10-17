@@ -26,6 +26,7 @@ from django.contrib import messages
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.auth.models import Group
 import os
 import os.path
 from weblate.lang.models import Language
@@ -182,7 +183,7 @@ class Project(models.Model, PercentMixin, URLMixin, PathMixin):
 
     is_git_lockable = True
 
-    class Meta:
+    class Meta(object):
         ordering = ['name']
         app_label = 'trans'
 
@@ -265,9 +266,10 @@ class Project(models.Model, PercentMixin, URLMixin, PathMixin):
         )
 
     def is_git_locked(self):
-        return max(
-            [subproject.locked for subproject in self.subproject_set.all()]
-        )
+        subprojects = self.subproject_set.all()
+        if len(subprojects) == 0:
+            return False
+        return max([subproject.locked for subproject in subprojects])
 
     def _get_path(self):
         return os.path.join(appsettings.GIT_ROOT, self.slug)
@@ -306,11 +308,13 @@ class Project(models.Model, PercentMixin, URLMixin, PathMixin):
                     permission.name = perm_name
                     permission.save()
             except Permission.DoesNotExist:
-                Permission.objects.create(
+                permission = Permission.objects.create(
                     codename=perm_code,
                     name=perm_name,
                     content_type=content_type
                 )
+            group, dummy = Group.objects.get_or_create(name=self.name)
+            group.permissions.add(permission)
 
     # Arguments number differs from overridden method
     # pylint: disable=W0221
@@ -432,11 +436,9 @@ class Project(models.Model, PercentMixin, URLMixin, PathMixin):
         """
         Returns date of last change done in Weblate.
         """
-        from weblate.trans.models.changes import Change
-        try:
-            change = Change.objects.content().filter(
-                translation__subproject__project=self
-            )
-            return change[0].timestamp
-        except IndexError:
+        resources = self.subproject_set.all()
+        changes = [resource.get_last_change() for resource in resources]
+        changes = [c for c in changes if c is not None]
+        if not changes:
             return None
+        return max(changes)

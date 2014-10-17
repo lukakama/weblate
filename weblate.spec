@@ -1,7 +1,7 @@
 Name:           weblate
-Version: 1.9
+Version: 1.10
 Release:        1
-License:        GPL-3+
+License:        GPL-3.0+
 Summary:        Web-based translation tool
 Group:          Productivity/Networking/Web/Frontends
 Source:         %{name}-%{version}.tar.bz2
@@ -18,7 +18,7 @@ Requires:       translate-toolkit >= 1.10.0
 Requires:       python-GitPython >= 0.3.2
 Requires:       python-whoosh >= 2.5.2
 Requires:       python-Pillow
-Requires:       python-South >= 0.7
+Requires:       python-South >= 1.0
 %py_requires
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
@@ -70,10 +70,18 @@ cp -a . %{buildroot}/%{WLDIR}
 
 # We ship this separately
 rm -rf %{buildroot}/%{WLDIR}/docs
-rm -f %{buildroot}/%{WLDIR}/README.md \
+rm -f %{buildroot}/%{WLDIR}/README.rst \
     %{buildroot}/%{WLDIR}/ChangeLog \
     %{buildroot}/%{WLDIR}/COPYING \
     %{buildroot}/%{WLDIR}/INSTALL
+rm -f \
+    %{buildroot}/%{WLDIR}/.coveragerc \
+    %{buildroot}/%{WLDIR}/.landscape.yaml \
+    %{buildroot}/%{WLDIR}/.travis.yml \
+    %{buildroot}/%{WLDIR}/.pep8 \
+    %{buildroot}/%{WLDIR}/.scrutinizer.yml \
+    %{buildroot}/%{WLDIR}/pylint.rc
+
 
 # Byte compile python files
 %py_compile %{buildroot}/%{WLDIR}
@@ -97,7 +105,7 @@ rm -rf %{buildroot}
 %files
 %defattr(-,root,root)
 %doc docs/_build/html
-%doc README.md
+%doc README.rst
 %config(noreplace) /%{_sysconfdir}/weblate
 %config(noreplace) /%{_sysconfdir}/apache2
 %{WLDIR}

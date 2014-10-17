@@ -181,11 +181,14 @@ def search(translation, request):
     # Remove old search results
     cleanup_session(request.session)
 
+    if name is not None:
+        name = unicode(name)
+
     # Store in cache and return
     search_id = str(uuid.uuid1())
     search_result = {
         'query': search_query,
-        'name': unicode(name),
+        'name': name,
         'ids': unit_ids,
         'search_id': search_id,
         'ttl': int(time.time()) + 86400,
@@ -210,6 +213,14 @@ def perform_suggestion(unit, form, request):
         messages.error(
             request,
             _('You don\'t have privileges to add suggestions!')
+        )
+        # Stay on same entry
+        return False
+    elif not unit.translation.subproject.enable_suggestions:
+        # Need privilege to add
+        messages.error(
+            request,
+            _('Suggestions are not allowed on this translation!')
         )
         # Stay on same entry
         return False
@@ -314,8 +325,7 @@ def handle_translate(translation, request, user_locked,
             request,
             _('You don\'t have privileges to save translations!')
         )
-    elif (unit.only_vote_suggestions()
-            and not request.user.has_perm('trans.save_translation')):
+    elif unit.only_vote_suggestions():
         messages.error(
             request,
             _('Only suggestions are allowed in this translation!')
@@ -568,7 +578,7 @@ def translate(request, project, subproject, lang):
 
     # Show secondary languages for logged in users
     if request.user.is_authenticated():
-        secondary = request.user.profile.get_secondary_units(unit)
+        secondary = unit.get_secondary_units(request.user)
     else:
         secondary = None
 
@@ -792,7 +802,7 @@ def save_zen(request, project, subproject, lang):
     translation = get_translation(request, project, subproject, lang)
     form = TranslationForm(translation, None, request.POST)
     if not form.is_valid():
-        messages.error(_('Failed to save translation!'))
+        messages.error(request, _('Failed to save translation!'))
     else:
         unit = form.cleaned_data['unit']
 

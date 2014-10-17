@@ -167,16 +167,18 @@
 {% endif %}
 {% endif %}
 
+{% if unit.translation.subproject.enable_suggestions %}
 {% if perms.trans.add_suggestion %}
 <input class="button" type="submit" value="{% trans "Suggest" %}" name="suggest" tabindex="151" {% if project_locked %}disabled="disabled"{% endif %} />
 {% else %}
 {% trans "No privileges for adding suggestions!" %}
 {% endif %}
+{% endif %}
 
 {% if perms.trans.save_translation %}
 <div class="menu-float tooltip">
-<div class="tooltip-content">{% trans "Additional text to include in the commit message." %}</div>
-{% trans "Commit message:" %} <input type="text" name="commit_message" class="commit_message" tabindex="152" value="{{ unit.translation.commit_message }}" />
+<div class="tooltip-content">{% trans "You can leave this empty in most cases as Weblate generates basic commit messages automatically." %}</div>
+{% trans "Commit message:" %} <input type="text" name="commit_message" class="commit_message" placeholder="{% trans "Additional text to include in the commit message." %}" tabindex="152" value="{{ unit.translation.commit_message }}" />
 </div>
 {% endif %}
 </td></tr>

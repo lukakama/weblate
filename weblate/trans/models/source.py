@@ -19,15 +19,55 @@
 #
 
 from django.db import models
+from django.utils.translation import ugettext_lazy as _
 
-from weblate.trans.models.subproject import SubProject
+PRIORITY_CHOICES = (
+    (60, _('Very high')),
+    (80, _('High')),
+    (100, _('Medium')),
+    (120, _('Low')),
+    (140, _('Very low')),
+)
 
 
 class Source(models.Model):
     checksum = models.CharField(max_length=40)
-    subproject = models.ForeignKey(SubProject)
+    subproject = models.ForeignKey('SubProject')
     timestamp = models.DateTimeField(auto_now_add=True)
+    priority = models.IntegerField(
+        default=100,
+        choices=PRIORITY_CHOICES,
+    )
 
-    class Meta:
+    class Meta(object):
+        permissions = (
+            ('edit_priority', "Can edit priority"),
+        )
         app_label = 'trans'
         unique_together = ('checksum', 'subproject')
+
+    def __init__(self, *args, **kwargs):
+        super(Source, self).__init__(*args, **kwargs)
+        self.priority_modified = False
+
+    def __unicode__(self):
+        return 'src:{0}'.format(self.checksum)
+
+    def save(self, force_insert=False, **kwargs):
+        """
+        Wrapper around save to indicate whether priority has been
+        modified.
+        """
+        if force_insert:
+            self.priority_modified = (self.priority != 100)
+        else:
+            old = Source.objects.get(pk=self.pk)
+            self.priority_modified = (old.priority != self.priority)
+        super(Source, self).save(force_insert, **kwargs)
+
+    @models.permalink
+    def get_absolute_url(self):
+        return ('review_source', (), {
+            'project': self.subproject.project.slug,
+            'subproject': self.subproject.slug,
+        })

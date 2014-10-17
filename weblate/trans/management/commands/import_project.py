@@ -20,8 +20,7 @@
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Q
-# In Django 1.5, this should come from django.utils.text
-from django.template.defaultfilters import slugify
+from django.utils.text import slugify
 from weblate.trans.models import SubProject, Project
 from weblate.trans.formats import FILE_FORMATS
 from weblate.trans.util import is_repo_link
@@ -37,20 +36,27 @@ import weblate
 
 
 class Command(BaseCommand):
+    """
+    Command for mass importing of repositories into Weblate.
+    """
     help = 'imports projects with more subprojects'
     args = '<project> <gitrepo> <branch> <filemask>'
     option_list = BaseCommand.option_list + (
         make_option(
             '--name-template',
             default='%s',
-            help='Python formatting string, transforming the filemask '
-                 'match to a project name'
+            help=(
+                'Python formatting string, transforming the filemask '
+                'match to a project name'
+            )
         ),
         make_option(
             '--base-file-template',
             default='',
-            help='Python formatting string, transforming the filemask '
-                 'match to a monolingual base file name'
+            help=(
+                'Python formatting string, transforming the filemask '
+                'match to a monolingual base file name'
+            )
         ),
         make_option(
             '--file-format',
@@ -58,6 +64,15 @@ class Command(BaseCommand):
             help='File format type, defaults to autodetection',
         ),
     )
+
+    def __init__(self, *args, **kwargs):
+        super(Command, self).__init__(*args, **kwargs)
+        self.filemask = None
+        self.file_format = None
+        self.name_template = None
+        self.base_file_template = None
+        self.logger = weblate.logger
+        self._mask_regexp = None
 
     def format_string(self, template, match):
         '''
@@ -67,17 +82,23 @@ class Command(BaseCommand):
             return template % match
         return template
 
-    def get_name(self, maskre, path):
-        matches = maskre.match(path)
+    def get_name(self, path):
+        """
+        Returns file name from patch based on filemask.
+        """
+        matches = self.match_regexp.match(path)
         return matches.group(1)
 
-    def get_match_regexp(self, filemask):
+    @property
+    def match_regexp(self):
         '''
-        Prepare regexp for file matching
+        Returns regexp for file matching
         '''
-        match = fnmatch.translate(filemask)
-        match = match.replace('.*.*', '(.*.*)')
-        return re.compile(match)
+        if self._mask_regexp is None:
+            match = fnmatch.translate(self.filemask)
+            match = match.replace('.*.*', '(.*.*)')
+            self._mask_regexp = re.compile(match)
+        return self._mask_regexp
 
     def checkout_tmp(self, project, repo, branch):
         '''
@@ -88,46 +109,47 @@ class Command(BaseCommand):
         os.chmod(workdir, 0755)
 
         # Initialize git repository
-        weblate.logger.info('Initializing git repository...')
+        self.logger.info('Initializing git repository...')
         gitrepo = git.Repo.init(workdir)
         gitrepo.git.remote('add', 'origin', repo)
 
-        weblate.logger.info('Fetching remote git repository...')
+        self.logger.info('Fetching remote git repository...')
         gitrepo.git.remote('update', 'origin')
         gitrepo.git.branch('--track', branch, 'origin/%s' % branch)
 
-        weblate.logger.info('Updating working copy in git repository...')
+        self.logger.info('Updating working copy in git repository...')
         gitrepo.git.checkout(branch)
 
         return workdir
 
-    def get_matching_files(self, repo, filemask):
+    def get_matching_files(self, repo):
         '''
         Returns relative path of matched files.
         '''
-        matches = glob(os.path.join(repo, filemask))
+        matches = glob(os.path.join(repo, self.filemask))
         return [f.replace(repo, '').strip('/') for f in matches]
 
-    def get_matching_subprojects(self, repo, filemask):
+    def get_matching_subprojects(self, repo):
         '''
         Scan the master repository for names matching our mask
         '''
         # Find matching files
-        matches = self.get_matching_files(repo, filemask)
-        weblate.logger.info('Found %d matching files', len(matches))
+        matches = self.get_matching_files(repo)
+        self.logger.info('Found %d matching files', len(matches))
 
         # Parse subproject names out of them
         names = set()
-        maskre = self.get_match_regexp(filemask)
         for match in matches:
-            names.add(self.get_name(maskre, match))
-        weblate.logger.info('Found %d subprojects', len(names))
+            names.add(self.get_name(match))
+        self.logger.info('Found %d subprojects', len(names))
         return names
 
     def handle(self, *args, **options):
         '''
         Automatic import of project.
         '''
+
+        # Check params
         if len(args) != 4:
             raise CommandError('Invalid number of parameters!')
 
@@ -136,20 +158,25 @@ class Command(BaseCommand):
                 'Invalid file format: %s' % options['file_format']
             )
 
-        # Read params, pylint: disable=W0632
-        prjname, repo, branch, filemask = args
+        # Read params
+        repo = args[1]
+        branch = args[2]
+        self.filemask = args[3]
+        self.file_format = options['file_format']
+        self.name_template = options['name_template']
+        self.base_file_template = options['base_file_template']
 
         # Try to get project
         try:
-            project = Project.objects.get(slug=prjname)
+            project = Project.objects.get(slug=args[0])
         except Project.DoesNotExist:
             raise CommandError(
                 'Project %s does not exist, you need to create it first!' %
-                prjname
+                args[0]
             )
 
         # Do we have correct mask?
-        if '**' not in filemask:
+        if '**' not in self.filemask:
             raise CommandError(
                 'You need to specify double wildcard '
                 'for subproject part of the match!'
@@ -169,31 +196,27 @@ class Command(BaseCommand):
                 )
             matches = self.get_matching_subprojects(
                 sub_project.get_path(),
-                filemask
             )
         else:
-            matches, sharedrepo = self.import_initial(
-                project, repo, branch, filemask, options['name_template'],
-                options['file_format'], options['base_file_template']
-            )
+            matches, sharedrepo = self.import_initial(project, repo, branch)
 
         # Create remaining subprojects sharing git repository
         for match in matches:
-            name = self.format_string(options['name_template'], match)
-            template = self.format_string(options['base_file_template'], match)
+            name = self.format_string(self.name_template, match)
+            template = self.format_string(self.base_file_template, match)
             slug = slugify(name)
             subprojects = SubProject.objects.filter(
                 Q(name=name) | Q(slug=slug),
                 project=project
             )
             if subprojects.exists():
-                weblate.logger.warn(
+                self.logger.warn(
                     'Subproject %s already exists, skipping',
                     name
                 )
                 continue
 
-            weblate.logger.info('Creating subproject %s', name)
+            self.logger.info('Creating subproject %s', name)
             SubProject.objects.create(
                 name=name,
                 slug=slug,
@@ -201,27 +224,26 @@ class Command(BaseCommand):
                 repo=sharedrepo,
                 branch=branch,
                 template=template,
-                file_format=options['file_format'],
-                filemask=filemask.replace('**', match)
+                file_format=self.file_format,
+                filemask=self.filemask.replace('**', match)
             )
 
-    def import_initial(self, project, repo, branch, filemask, name_template,
-                       file_format, base_file_template):
+    def import_initial(self, project, repo, branch):
         '''
         Import the first repository of a project
         '''
         # Checkout git to temporary dir
         workdir = self.checkout_tmp(project, repo, branch)
-        matches = self.get_matching_subprojects(workdir, filemask)
+        matches = self.get_matching_subprojects(workdir)
 
         # Create first subproject (this one will get full git repo)
         match = matches.pop()
-        name = self.format_string(name_template, match)
-        template = self.format_string(base_file_template, match)
+        name = self.format_string(self.name_template, match)
+        template = self.format_string(self.base_file_template, match)
         slug = slugify(name)
 
         if SubProject.objects.filter(project=project, slug=slug).exists():
-            weblate.logger.warn(
+            self.logger.warn(
                 'Subproject %s already exists, skipping and using it '
                 'as main subproject',
                 name
@@ -229,7 +251,7 @@ class Command(BaseCommand):
             shutil.rmtree(workdir)
             return matches, 'weblate://%s/%s' % (project.slug, slug)
 
-        weblate.logger.info('Creating subproject %s as main subproject', name)
+        self.logger.info('Creating subproject %s as main subproject', name)
 
         # Rename gitrepository to new name
         os.rename(
@@ -243,9 +265,9 @@ class Command(BaseCommand):
             project=project,
             repo=repo,
             branch=branch,
-            file_format=file_format,
+            file_format=self.file_format,
             template=template,
-            filemask=filemask.replace('**', match)
+            filemask=self.filemask.replace('**', match)
         )
 
         sharedrepo = 'weblate://%s/%s' % (project.slug, slug)

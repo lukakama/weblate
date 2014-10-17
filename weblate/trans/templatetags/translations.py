@@ -27,7 +27,6 @@ from django.utils.translation import ugettext as _, ungettext, ugettext_lazy
 from django.utils.formats import date_format
 from django.utils import timezone
 from django import template
-from weblate import appsettings
 
 import re
 
@@ -183,15 +182,6 @@ def fmtsourcediff(value, other):
     return fmttranslation(other.source, diff=value)
 
 
-@register.filter
-@stringfilter
-def site_title(value):
-    '''
-    Returns site title
-    '''
-    return appsettings.SITE_TITLE
-
-
 @register.simple_tag
 def check_name(check):
     '''
@@ -199,7 +189,7 @@ def check_name(check):
     '''
     try:
         return CHECKS[check].name
-    except:
+    except KeyError:
         return check
 
 
@@ -210,7 +200,7 @@ def check_description(check):
     '''
     try:
         return CHECKS[check].description
-    except:
+    except KeyError:
         return check
 
 
@@ -267,13 +257,12 @@ def admin_boolean_icon(val):
     '''
     Admin icon wrapper.
     '''
-    icon_url = static('admin/img/icon-%s.gif' % TYPE_MAPPING[val]
-                      )
+    icon_url = static('admin/img/icon-%s.gif' % TYPE_MAPPING[val])
     return mark_safe(
-        u'<img src="%(url)s" alt="%(text)s" title="%(text)s" />' % {
-            'url': icon_url,
-            'text': NAME_MAPPING[val],
-        }
+        u'<img src="{url}" alt="{text}" title="{text}" />'.format(
+            url=icon_url,
+            text=NAME_MAPPING[val],
+        )
     )
 
 
@@ -304,6 +293,132 @@ def gitdate(value):
     )
 
 
+def naturaltime_past(value, now):
+    """
+    Handling of past dates for naturaltime.
+    """
+
+    # this function is huge
+    # pylint: disable=R0911,R0912
+
+    delta = now - value
+
+    if delta.days >= 365:
+        count = delta.days / 365
+        if count == 1:
+            return _('a year ago')
+        return ungettext(
+            '%(count)s year ago', '%(count)s years ago', count
+        ) % {'count': count}
+    elif delta.days >= 30:
+        count = delta.days / 30
+        if count == 1:
+            return _('a month ago')
+        return ungettext(
+            '%(count)s month ago', '%(count)s months ago', count
+        ) % {'count': count}
+    elif delta.days >= 14:
+        count = delta.days / 7
+        return ungettext(
+            '%(count)s week ago', '%(count)s weeks ago', count
+        ) % {'count': count}
+    elif delta.days > 0:
+        if delta.days == 7:
+            return _('a week ago')
+        if delta.days == 1:
+            return _('yesterday')
+        return ungettext(
+            '%(count)s day ago', '%(count)s days ago', delta.days
+        ) % {'count': delta.days}
+    elif delta.seconds == 0:
+        return _('now')
+    elif delta.seconds < 60:
+        if delta.seconds == 1:
+            return _('a second ago')
+        return ungettext(
+            '%(count)s second ago', '%(count)s seconds ago', delta.seconds
+        ) % {'count': delta.seconds}
+    elif delta.seconds // 60 < 60:
+        count = delta.seconds // 60
+        if count == 1:
+            return _('a minute ago')
+        return ungettext(
+            '%(count)s minute ago', '%(count)s minutes ago', count
+        ) % {'count': count}
+    else:
+        count = delta.seconds // 60 // 60
+        if count == 1:
+            return _('an hour ago')
+        return ungettext(
+            '%(count)s hour ago', '%(count)s hours ago', count
+        ) % {'count': count}
+
+
+def naturaltime_future(value, now):
+    """
+    Handling of future dates for naturaltime.
+    """
+
+    # this function is huge
+    # pylint: disable=R0911,R0912
+
+    delta = value - now
+
+    if delta.days >= 365:
+        count = delta.days / 365
+        if count == 1:
+            return _('a year from now')
+        return ungettext(
+            '%(count)s year from now', '%(count)s years from now', count
+        ) % {'count': count}
+    elif delta.days >= 30:
+        count = delta.days / 30
+        if count == 1:
+            return _('a month from now')
+        return ungettext(
+            '%(count)s month from now', '%(count)s months from now', count
+        ) % {'count': count}
+    elif delta.days >= 14:
+        count = delta.days / 7
+        return ungettext(
+            '%(count)s week from now', '%(count)s weeks from now', count
+        ) % {'count': count}
+    elif delta.days > 0:
+        if delta.days == 1:
+            return _('tomorrow')
+        if delta.days == 7:
+            return _('a week from now')
+        return ungettext(
+            '%(count)s day from now', '%(count)s days from now', delta.days
+        ) % {'count': delta.days}
+    elif delta.seconds == 0:
+        return _('now')
+    elif delta.seconds < 60:
+        if delta.seconds == 1:
+            return _('a second from now')
+        return ungettext(
+            '%(count)s second from now',
+            '%(count)s seconds from now',
+            delta.seconds
+        ) % {'count': delta.seconds}
+    elif delta.seconds // 60 < 60:
+        count = delta.seconds // 60
+        if count == 1:
+            return _('a minute from now')
+        return ungettext(
+            '%(count)s minute from now',
+            '%(count)s minutes from now',
+            count
+        ) % {'count': count}
+    else:
+        count = delta.seconds // 60 // 60
+        if count == 1:
+            return _('an hour from now')
+        return ungettext(
+            '%(count)s hour from now', '%(count)s hours from now', count
+        ) % {'count': count}
+
+
 @register.filter
 def naturaltime(value, now=None):
     """
@@ -313,9 +428,6 @@ def naturaltime(value, now=None):
     For date and time values shows how many seconds, minutes or hours ago
     compared to current timestamp returns representing string.
     """
-    # this function is huge
-    # pylint: disable=R0911,R0912
-
     # datetime is a subclass of date
     if not isinstance(value, date):
         return value
@@ -323,111 +435,9 @@ def naturaltime(value, now=None):
     if now is None:
         now = timezone.now()
     if value < now:
-        delta = now - value
-        if delta.days >= 365:
-            count = delta.days / 365
-            if count == 1:
-                return _('a year ago')
-            return ungettext(
-                '%(count)s year ago', '%(count)s years ago', count
-            ) % {'count': count}
-        elif delta.days >= 30:
-            count = delta.days / 30
-            if count == 1:
-                return _('a month ago')
-            return ungettext(
-                '%(count)s month ago', '%(count)s months ago', count
-            ) % {'count': count}
-        elif delta.days >= 14:
-            count = delta.days / 7
-            return ungettext(
-                '%(count)s week ago', '%(count)s weeks ago', count
-            ) % {'count': count}
-        elif delta.days > 0:
-            if delta.days == 7:
-                return _('a week ago')
-            if delta.days == 1:
-                return _('yesterday')
-            return ungettext(
-                '%(count)s day ago', '%(count)s days ago', delta.days
-            ) % {'count': delta.days}
-        elif delta.seconds == 0:
-            return _('now')
-        elif delta.seconds < 60:
-            if delta.seconds == 1:
-                return _('a second ago')
-            return ungettext(
-                '%(count)s second ago', '%(count)s seconds ago', delta.seconds
-            ) % {'count': delta.seconds}
-        elif delta.seconds // 60 < 60:
-            count = delta.seconds // 60
-            if count == 1:
-                return _('a minute ago')
-            return ungettext(
-                '%(count)s minute ago', '%(count)s minutes ago', count
-            ) % {'count': count}
-        else:
-            count = delta.seconds // 60 // 60
-            if count == 1:
-                return _('an hour ago')
-            return ungettext(
-                '%(count)s hour ago', '%(count)s hours ago', count
-            ) % {'count': count}
+        return naturaltime_past(value, now)
     else:
-        delta = value - now
-        if delta.days >= 365:
-            count = delta.days / 365
-            if count == 1:
-                return _('a year from now')
-            return ungettext(
-                '%(count)s year from now', '%(count)s years from now', count
-            ) % {'count': count}
-        elif delta.days >= 30:
-            count = delta.days / 30
-            if count == 1:
-                return _('a month from now')
-            return ungettext(
-                '%(count)s month from now', '%(count)s months from now', count
-            ) % {'count': count}
-        elif delta.days >= 14:
-            count = delta.days / 7
-            return ungettext(
-                '%(count)s week from now', '%(count)s weeks from now', count
-            ) % {'count': count}
-        elif delta.days > 0:
-            if delta.days == 1:
-                return _('tomorrow')
-            if delta.days == 7:
-                return _('a week from now')
-            return ungettext(
-                '%(count)s day from now', '%(count)s days from now', delta.days
-            ) % {'count': delta.days}
-        elif delta.seconds == 0:
-            return _('now')
-        elif delta.seconds < 60:
-            if delta.seconds == 1:
-                return _('a second from now')
-            return ungettext(
-                '%(count)s second from now',
-                '%(count)s seconds from now',
-                delta.seconds
-            ) % {'count': delta.seconds}
-        elif delta.seconds // 60 < 60:
-            count = delta.seconds // 60
-            if count == 1:
-                return _('a minute from now')
-            return ungettext(
-                '%(count)s minute from now',
-                '%(count)s minutes from now',
-                count
-            ) % {'count': count}
-        else:
-            count = delta.seconds // 60 // 60
-            if count == 1:
-                return _('an hour from now')
-            return ungettext(
-                '%(count)s hour from now', '%(count)s hours from now', count
-            ) % {'count': count}
+        return naturaltime_future(value, now)
 
 
 @register.simple_tag

@@ -21,7 +21,6 @@
 # For some reasons, this fails in PyLint sometimes...
 # pylint: disable=E0611,F0401
 from distutils.version import LooseVersion
-from weblate import GIT_VERSION
 import importlib
 import sys
 
@@ -187,7 +186,7 @@ def get_versions():
         name,
         url,
         mod.__version__,
-        '0.7',
+        '1.0',
     ))
 
     name = 'Pillow (PIL)'
@@ -226,21 +225,6 @@ def check_version(name, url, version, expected):
         return True
 
     return False
-
-
-def get_versions_string():
-    '''
-    Returns string with version information summary.
-    '''
-    result = [' * Weblate %s' % GIT_VERSION]
-    for version in get_versions() + get_optional_versions():
-        result.append(
-            ' * %s %s' % (
-                version[0],
-                version[2],
-            )
-        )
-    return '\n'.join(result)
 
 
 def check_requirements():

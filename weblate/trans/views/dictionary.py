@@ -37,6 +37,16 @@ import csv
 from urllib import urlencode
 
 
+def dict_title(prj, lang):
+    """
+    Returns dictionary title.
+    """
+    return _('%(language)s dictionary for %(project)s') % {
+        'language': lang,
+        'project': prj
+    }
+
+
 def show_dictionaries(request, project):
     obj = get_project(request, project)
     dicts = Translation.objects.filter(
@@ -92,8 +102,7 @@ def edit_dictionary(request, project, lang):
         request,
         'edit_dictionary.html',
         {
-            'title': _('%(language)s dictionary for %(project)s') %
-            {'language': lang, 'project': prj},
+            'title': dict_title(prj, lang),
             'project': prj,
             'language': lang,
             'form': form,
@@ -330,8 +339,7 @@ def show_dictionary(request, project, lang):
         request,
         'dictionary.html',
         {
-            'title': _('%(language)s dictionary for %(project)s') %
-            {'language': lang, 'project': prj},
+            'title': dict_title(prj, lang),
             'project': prj,
             'language': lang,
             'words': words,

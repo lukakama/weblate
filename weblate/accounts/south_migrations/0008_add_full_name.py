@@ -17,23 +17,29 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-from south.db import db
-from south.v2 import SchemaMigration
 
+from south.v2 import DataMigration
 
-class Migration(SchemaMigration):
+class Migration(DataMigration):
+
+    depends_on = (
+        ('lang', '0003_auto__add_field_language_plural_type'),
+    )
 
     def forwards(self, orm):
-        # Adding field 'Profile.subscribe_new_language'
-        db.add_column(u'accounts_profile', 'subscribe_new_language',
-                      self.gf('django.db.models.fields.BooleanField')(default=False),
-                      keep_default=False)
-
+        '''
+        Merges first and last name into one field.
+        '''
+        for user in orm['auth.User'].objects.all():
+            if user.last_name not in user.first_name:
+                user.first_name = u'{0} {1}'.format(
+                    user.first_name,
+                    user.last_name
+                )
+                user.save()
 
     def backwards(self, orm):
-        # Deleting field 'Profile.subscribe_new_language'
-        db.delete_column(u'accounts_profile', 'subscribe_new_language')
-
+        "Write your backwards methods here."
 
     models = {
         u'accounts.profile': {
@@ -52,7 +58,13 @@ class Migration(SchemaMigration):
             'subscriptions': ('django.db.models.fields.related.ManyToManyField', [], {'to': "orm['trans.Project']", 'symmetrical': 'False'}),
             'suggested': ('django.db.models.fields.IntegerField', [], {'default': '0', 'db_index': 'True'}),
             'translated': ('django.db.models.fields.IntegerField', [], {'default': '0', 'db_index': 'True'}),
-            'user': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['auth.User']", 'unique': 'True'})
+            'user': ('django.db.models.fields.related.OneToOneField', [], {'to': u"orm['auth.User']", 'unique': 'True'})
+        },
+        u'accounts.verifiedemail': {
+            'Meta': {'object_name': 'VerifiedEmail'},
+            'email': ('django.db.models.fields.EmailField', [], {'max_length': '75'}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'social': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['default.UserSocialAuth']"})
         },
         u'auth.group': {
             'Meta': {'object_name': 'Group'},
@@ -72,7 +84,7 @@ class Migration(SchemaMigration):
             'date_joined': ('django.db.models.fields.DateTimeField', [], {'default': 'datetime.datetime.now'}),
             'email': ('django.db.models.fields.EmailField', [], {'max_length': '75', 'blank': 'True'}),
             'first_name': ('django.db.models.fields.CharField', [], {'max_length': '30', 'blank': 'True'}),
-            'groups': ('django.db.models.fields.related.ManyToManyField', [], {'to': u"orm['auth.Group']", 'symmetrical': 'False', 'blank': 'True'}),
+            'groups': ('django.db.models.fields.related.ManyToManyField', [], {'symmetrical': 'False', 'related_name': "u'user_set'", 'blank': 'True', 'to': u"orm['auth.Group']"}),
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'is_active': ('django.db.models.fields.BooleanField', [], {'default': 'True'}),
             'is_staff': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
@@ -80,7 +92,7 @@ class Migration(SchemaMigration):
             'last_login': ('django.db.models.fields.DateTimeField', [], {'default': 'datetime.datetime.now'}),
             'last_name': ('django.db.models.fields.CharField', [], {'max_length': '30', 'blank': 'True'}),
             'password': ('django.db.models.fields.CharField', [], {'max_length': '128'}),
-            'user_permissions': ('django.db.models.fields.related.ManyToManyField', [], {'to': u"orm['auth.Permission']", 'symmetrical': 'False', 'blank': 'True'}),
+            'user_permissions': ('django.db.models.fields.related.ManyToManyField', [], {'symmetrical': 'False', 'related_name': "u'user_set'", 'blank': 'True', 'to': u"orm['auth.Permission']"}),
             'username': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '30'})
         },
         u'contenttypes.contenttype': {
@@ -89,6 +101,14 @@ class Migration(SchemaMigration):
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'model': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
             'name': ('django.db.models.fields.CharField', [], {'max_length': '100'})
+        },
+        u'default.usersocialauth': {
+            'Meta': {'unique_together': "(('provider', 'uid'),)", 'object_name': 'UserSocialAuth', 'db_table': "'social_auth_usersocialauth'"},
+            'extra_data': ('social.apps.django_app.default.fields.JSONField', [], {'default': "'{}'"}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'provider': ('django.db.models.fields.CharField', [], {'max_length': '32'}),
+            'uid': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'user': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'social_auth'", 'to': u"orm['auth.User']"})
         },
         u'lang.language': {
             'Meta': {'ordering': "['name']", 'object_name': 'Language'},
@@ -122,3 +142,4 @@ class Migration(SchemaMigration):
     }
 
     complete_apps = ['accounts']
+    symmetrical = True

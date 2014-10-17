@@ -37,11 +37,10 @@ from south.signals import post_migrate
 from social.apps.django_app.default.models import UserSocialAuth
 
 from weblate.lang.models import Language
-from weblate.trans.models import Project, Change
-from weblate.trans.util import get_site_url, get_distinct_translations
+from weblate.trans.util import get_site_url
 from weblate.accounts.avatar import get_user_display
 import weblate
-from weblate.appsettings import ANONYMOUS_USER_NAME
+from weblate.appsettings import ANONYMOUS_USER_NAME, SITE_TITLE
 
 
 def notify_merge_failure(subproject, error, status):
@@ -184,10 +183,8 @@ def send_notification_email(language, email, notification,
     Renders and sends notification email.
     '''
     cur_language = django_translation.get_language()
-    if context is None:
-        context = {}
-    if headers is None:
-        headers = {}
+    context = context or {}
+    headers = headers or {}
     try:
         if info is None:
             info = translation_obj.__unicode__()
@@ -202,10 +199,10 @@ def send_notification_email(language, email, notification,
         if language is not None:
             django_translation.activate(language)
 
-        # Template names
-        subject_template = 'mail/{}_subject.txt'.format(notification)
-        body_template = 'mail/{}.txt'.format(notification)
-        html_body_template = 'mail/{}.html'.format(notification)
+        # Template name
+        context['subject_template'] = 'mail/{}_subject.txt'.format(
+            notification
+        )
 
         # Adjust context
         context['current_site_url'] = get_site_url()
@@ -214,14 +211,23 @@ def send_notification_email(language, email, notification,
             context['translation_url'] = get_site_url(
                 translation_obj.get_absolute_url()
             )
-        context['subject_template'] = subject_template
+        context['site_title'] = SITE_TITLE
 
         # Render subject
-        subject = render_to_string(subject_template, context).strip()
+        subject = render_to_string(
+            context['subject_template'],
+            context
+        ).strip()
 
         # Render body
-        body = render_to_string(body_template, context)
-        html_body = render_to_string(html_body_template, context)
+        body = render_to_string(
+            'mail/{}.txt'.format(notification),
+            context
+        )
+        html_body = render_to_string(
+            'mail/{}.html'.format(notification),
+            context
+        )
 
         # Define headers
         headers['Auto-Submitted'] = 'auto-generated'
@@ -360,7 +366,7 @@ class Profile(models.Model):
     translated = models.IntegerField(default=0, db_index=True)
 
     subscriptions = models.ManyToManyField(
-        Project,
+        'trans.Project',
         verbose_name=_('Subscribed projects')
     )
 
@@ -418,10 +424,7 @@ class Profile(models.Model):
         Returns date of last change user has done in Weblate.
         '''
         try:
-            change = Change.objects.filter(
-                user=self.user
-            )
-            return change[0].timestamp
+            return self.user.change_set.all()[0].timestamp
         except IndexError:
             return None
 
@@ -550,24 +553,6 @@ class Profile(models.Model):
         '''
         return self.user.first_name
 
-    def get_secondary_units(self, unit):
-        '''
-        Returns list of secondary units.
-        '''
-        from weblate.trans.models.unit import Unit
-        secondary_langs = self.secondary_languages.exclude(
-            id=unit.translation.language.id
-        )
-        project = unit.translation.subproject.project
-        return get_distinct_translations(
-            Unit.objects.filter(
-                checksum=unit.checksum,
-                translated=True,
-                translation__subproject__project=project,
-                translation__language__in=secondary_langs,
-            )
-        )
-
 
 @receiver(user_logged_in)
 def set_lang(sender, **kwargs):
@@ -663,6 +648,7 @@ def create_groups(update):
             Permission.objects.get(codename='delete_comment'),
             Permission.objects.get(codename='add_suggestion'),
             Permission.objects.get(codename='use_mt'),
+            Permission.objects.get(codename='edit_priority'),
         )
 
     try:
@@ -731,14 +717,14 @@ def sync_create_groups(sender, app, **kwargs):
 
 
 @receiver(post_save, sender=User)
-def create_profile_callback(sender, **kwargs):
+def create_profile_callback(sender, instance, created=False, **kwargs):
     '''
     Automatically adds user to Users group.
     '''
-    if kwargs['created']:
+    if created:
         # Add user to Users group if it exists
         try:
             group = Group.objects.get(name='Users')
-            kwargs['instance'].groups.add(group)
+            instance.groups.add(group)
         except Group.DoesNotExist:
             pass

@@ -237,6 +237,12 @@ class LanguageManager(models.Manager):
                 lang.direction = 'rtl'
             else:
                 lang.direction = 'ltr'
+
+            # Get plural type
+            lang.plural_type = get_plural_type(
+                lang.code,
+                lang.pluralequation
+            )
             lang.save()
 
     def have_translation(self):
@@ -244,6 +250,42 @@ class LanguageManager(models.Manager):
         Returns list of languages which have at least one translation.
         '''
         return self.filter(translation__total__gt=0).distinct()
+
+    def check(self, filename):
+        """
+        Checks database language definitions with supplied ones.
+        """
+        errors = []
+        with open(filename) as handle:
+            for line in handle:
+                line = line.strip().decode('utf-8')
+                parts = [part.strip() for part in line.split(',')]
+                if len(parts) != 3:
+                    continue
+                lang, name, plurals = parts
+                nplurals, pluralform = plurals.strip(';').split(';')
+                nplurals = int(nplurals.split('=', 1)[1])
+                pluralform = pluralform.split('=', 1)[1]
+                try:
+                    language = Language.objects.get(code=lang)
+                except Language.DoesNotExist:
+                    errors.append(
+                        u'missing language {0}: {1} ({2})'.format(
+                            lang, name, plurals
+                        )
+                    )
+                    continue
+                if nplurals != language.nplurals:
+                    errors.append(
+                        u'different number of plurals {0}: {1} ({2})'.format(
+                            lang, name, plurals
+                        )
+                    )
+                    errors.append(
+                        u'have {0}'.format(language.get_plural_form())
+                    )
+
+        return errors
 
 
 @receiver(post_syncdb)
@@ -262,6 +304,7 @@ class Language(models.Model, PercentMixin):
         (data.PLURAL_ONE_OTHER, 'One/other (classic plural)'),
         (data.PLURAL_ONE_FEW_OTHER, 'One/few/other (Slavic languages)'),
         (data.PLURAL_ARABIC, 'Arabic languages'),
+        (data.PLURAL_ZERO_ONE_OTHER, 'Zero/one/other'),
         (data.PLURAL_ONE_TWO_OTHER, 'One/two/other'),
         (data.PLURAL_ONE_TWO_FEW_OTHER, 'One/two/few/other'),
         (data.PLURAL_ONE_TWO_THREE_OTHER, 'One/two/three/other'),
@@ -287,7 +330,7 @@ class Language(models.Model, PercentMixin):
 
     objects = LanguageManager()
 
-    class Meta:
+    class Meta(object):
         ordering = ['name']
 
     def __init__(self, *args, **kwargs):
@@ -337,11 +380,8 @@ class Language(models.Model, PercentMixin):
         if self._percents is not None:
             return self._percents
 
-        # Import translations
-        from weblate.trans.models.translation import Translation
-
-        # Get prercents
-        result = Translation.objects.get_percents(language=self)
+        # Get translations percents
+        result = self.translation_set.get_percents()
 
         # Update cache
         self._percents = result

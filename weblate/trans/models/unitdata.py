@@ -23,29 +23,9 @@ from django.db.models import Count
 from django.contrib.auth.models import User
 from weblate.lang.models import Language
 from weblate.trans.checks import CHECKS
-from weblate.trans.models.unit import Unit
-from weblate.trans.models.project import Project
 from weblate.trans.models.changes import Change
 from weblate.accounts.avatar import get_user_display
-
-
-class RelatedUnitMixin(object):
-    '''
-    Mixin to provide access to related units for contentsum referenced objects.
-    '''
-    def get_related_units(self):
-        '''
-        Returns queryset with related units.
-        '''
-        related_units = Unit.objects.filter(
-            contentsum=self.contentsum,
-            translation__subproject__project=self.project,
-        )
-        if self.language is not None:
-            related_units = related_units.filter(
-                translation__language=self.language
-            )
-        return related_units
+from weblate.accounts.models import notify_new_suggestion, notify_new_comment
 
 
 class SuggestionManager(models.Manager):
@@ -53,7 +33,6 @@ class SuggestionManager(models.Manager):
         '''
         Creates new suggestion for this unit.
         '''
-        from weblate.accounts.models import notify_new_suggestion
 
         if not request.user.is_authenticated():
             user = None
@@ -94,16 +73,12 @@ class SuggestionManager(models.Manager):
             user.profile.suggested += 1
             user.profile.save()
 
-        # Update unit flags
-        for relunit in suggestion.get_related_units():
-            relunit.update_has_suggestion()
 
-
-class Suggestion(models.Model, RelatedUnitMixin):
+class Suggestion(models.Model):
     contentsum = models.CharField(max_length=40, db_index=True)
     target = models.TextField()
     user = models.ForeignKey(User, null=True, blank=True)
-    project = models.ForeignKey(Project)
+    project = models.ForeignKey('Project')
     language = models.ForeignKey(Language)
 
     votes = models.ManyToManyField(
@@ -114,7 +89,7 @@ class Suggestion(models.Model, RelatedUnitMixin):
 
     objects = SuggestionManager()
 
-    class Meta:
+    class Meta(object):
         permissions = (
             ('accept_suggestion', "Can accept suggestion"),
             ('override_suggestion', 'Can override suggestion state'),
@@ -140,31 +115,6 @@ class Suggestion(models.Model, RelatedUnitMixin):
             )
 
         self.delete()
-
-    def delete(self, *args, **kwargs):
-        super(Suggestion, self).delete(*args, **kwargs)
-        # Update unit flags
-        for unit in self.get_related_units():
-            unit.update_has_suggestion()
-
-    def get_matching_unit(self):
-        '''
-        Retrieves one (possibly out of several) unit matching
-        this suggestion.
-        '''
-        return self.get_related_units()[0]
-
-    def get_source(self):
-        '''
-        Returns source strings matching this suggestion.
-        '''
-        return self.get_matching_unit().source
-
-    def get_review_url(self):
-        '''
-        Returns URL which can be used for review.
-        '''
-        return self.get_matching_unit().get_absolute_url()
 
     def get_user_display(self):
         return get_user_display(self.user, link=True)
@@ -204,7 +154,7 @@ class Vote(models.Model):
     user = models.ForeignKey(User)
     positive = models.BooleanField(default=True)
 
-    class Meta:
+    class Meta(object):
         unique_together = ('suggestion', 'user')
         app_label = 'trans'
 
@@ -225,8 +175,6 @@ class CommentManager(models.Manager):
         '''
         Adds comment to this unit.
         '''
-        from weblate.accounts.models import notify_new_comment
-
         new_comment = self.create(
             user=user,
             contentsum=unit.contentsum,
@@ -242,16 +190,6 @@ class CommentManager(models.Manager):
             author=user
         )
 
-        # Invalidate counts cache
-        if lang is None:
-            unit.translation.invalidate_cache('sourcecomments')
-        else:
-            unit.translation.invalidate_cache('targetcomments')
-
-        # Update unit stats
-        for relunit in new_comment.get_related_units():
-            relunit.update_has_comment()
-
         # Notify subscribed users
         notify_new_comment(
             unit,
@@ -261,17 +199,17 @@ class CommentManager(models.Manager):
         )
 
 
-class Comment(models.Model, RelatedUnitMixin):
+class Comment(models.Model):
     contentsum = models.CharField(max_length=40, db_index=True)
     comment = models.TextField()
     user = models.ForeignKey(User, null=True, blank=True)
-    project = models.ForeignKey(Project)
+    project = models.ForeignKey('Project')
     language = models.ForeignKey(Language, null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
 
     objects = CommentManager()
 
-    class Meta:
+    class Meta(object):
         ordering = ['timestamp']
         app_label = 'trans'
 
@@ -284,23 +222,18 @@ class Comment(models.Model, RelatedUnitMixin):
     def get_user_display(self):
         return get_user_display(self.user, link=True)
 
-    def delete(self, *args, **kwargs):
-        super(Comment, self).delete(*args, **kwargs)
-        # Update unit flags
-        for unit in self.get_related_units():
-            unit.update_has_comment()
 
 CHECK_CHOICES = [(x, CHECKS[x].name) for x in CHECKS]
 
 
-class Check(models.Model, RelatedUnitMixin):
+class Check(models.Model):
     contentsum = models.CharField(max_length=40, db_index=True)
-    project = models.ForeignKey(Project)
+    project = models.ForeignKey('Project')
     language = models.ForeignKey(Language, null=True, blank=True)
     check = models.CharField(max_length=20, choices=CHECK_CHOICES)
-    ignore = models.BooleanField(db_index=True)
+    ignore = models.BooleanField(db_index=True, default=False)
 
-    class Meta:
+    class Meta(object):
         permissions = (
             ('ignore_check', "Can ignore check results"),
         )
@@ -332,18 +265,3 @@ class Check(models.Model, RelatedUnitMixin):
         '''
         self.ignore = True
         self.save()
-
-        # Update related unit flags
-        for unit in self.get_related_units():
-            unit.update_has_failing_check(False)
-
-
-class IndexUpdate(models.Model):
-    unit = models.ForeignKey(Unit)
-    source = models.BooleanField(default=True)
-
-    class Meta:
-        app_label = 'trans'
-
-    def __unicode__(self):
-        return self.unit.__unicode__()

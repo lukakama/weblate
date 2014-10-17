@@ -22,7 +22,9 @@ from weblate.trans.tests.test_views import ViewTestCase
 import weblate.trans.admin_views
 from django.test import TestCase
 from django.core.urlresolvers import reverse
+from django.utils.unittest import SkipTest
 from weblate.trans.tests.test_util import get_test_file
+from weblate.trans.util import add_configuration_error
 import tempfile
 import shutil
 import os
@@ -84,10 +86,13 @@ class AdminTest(ViewTestCase):
                 reverse('admin-ssh'),
                 {'action': 'add-host', 'host': 'github.com'}
             )
+            if 'Name or service not known' in response.content:
+                raise SkipTest('Network error')
             self.assertContains(response, 'Added host key for github.com')
 
             # Check the file contains it
-            self.assertIn('github.com', file(hostsfile).read())
+            with open(hostsfile) as handle:
+                self.assertIn('github.com', handle.read())
         finally:
             weblate.trans.admin_views.KNOWN_HOSTS_FILE = backup
             shutil.rmtree(tempdir)
@@ -95,6 +100,11 @@ class AdminTest(ViewTestCase):
     def test_performace(self):
         response = self.client.get(reverse('admin-performance'))
         self.assertContains(response, 'Django caching')
+
+    def test_error(self):
+        add_configuration_error('Test error', 'FOOOOOOOOOOOOOO')
+        response = self.client.get(reverse('admin-performance'))
+        self.assertContains(response, 'FOOOOOOOOOOOOOO')
 
     def test_report(self):
         response = self.client.get(reverse('admin-report'))

@@ -38,7 +38,9 @@
 {% if perms.trans.commit_translation or perms.trans.update_translation %}
 <li><a href="{% url 'git_status_subproject' project=object.project.slug subproject=object.slug %}">{% trans "Git maintenance" %}</a></li>
 {% endif %}
+{% if enable_sharing %}
 <li><a href="#share">{% trans "Share" %}</a></li>
+{% endif %}
 <li><a href="#tools">{% trans "Tools" %}</a></li>
 <li><a href="{% url 'view_activity_subproject' project=object.project.slug subproject=object.slug %}">{% trans "Activity" %}</a></li>
 </ul>
@@ -48,7 +50,7 @@
 {% if object.project.new_lang == 'url' %}
 <p>{% blocktrans with object.project.instructions as url %}Should your language be missing, please follow <a href="{{ url }}">translator instructions</a>.{% endblocktrans %}</li>
 {% else %}
-<p>{% trans "Please choose language into which you would like to translate." %}</p>
+<p>{% trans "Please choose the language into which you would like to translate." %}</p>
 <form action="{% url 'new-language' project=object.project.slug subproject=object.slug %}" method="post">
 {% csrf_token %}
 <table>
@@ -62,7 +64,8 @@
 </tr>
 </table>
 </form>
-<p>{% blocktrans %}Should your language be missing, please <a href="{{ contact_url }}?subject=New+language+request+for+{{ object }}">contact us</a>.{% endblocktrans %}</li>
+<p>{% trans "Can not find your language in above list?" %}</p>
+<p><a class="button" href="{{ contact_url }}?subject=New+language+request+for+{{ object }}">{% trans "Report missing language" %}</a></p>
 {% endif %}
 </div>
 {% endif %}
@@ -71,15 +74,18 @@
 {% include "last-changes.html" %}
 </div>
 
+{% if enable_sharing %}
 <div id="share">
 {% with object.project as project %}
 {% include 'share.html' %}
 {% endwith %}
 </div>
+{% endif %}
 
 <div id="tools">
 <ul>
 <li><a href="{% url 'show_source' project=object.project.slug subproject=object.slug %}">{% trans "Source strings review" %}</a></li>
+<li><a href="{% url 'data_project' project=object.project.slug %}">{% trans "Machine-readable data" %}</a></li>
 </ul>
 </div>
 

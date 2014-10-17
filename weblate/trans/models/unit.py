@@ -27,12 +27,17 @@ from django.contrib import messages
 from django.core.cache import cache
 import traceback
 from weblate.trans.checks import CHECKS
-from weblate.trans.models.translation import Translation
 from weblate.trans.models.source import Source
+from weblate.trans.models.unitdata import Check, Comment, Suggestion
+from weblate.trans.models.changes import Change
 from weblate.trans.search import update_index_unit, fulltext_search, more_like
-
+from weblate.accounts.models import (
+    notify_new_contributor, notify_new_translation
+)
 from weblate.trans.filelock import FileLockException
-from weblate.trans.util import is_plural, split_plural, join_plural
+from weblate.trans.util import (
+    is_plural, split_plural, join_plural, get_distinct_translations
+)
 import weblate
 
 FLAG_TEMPLATE = '<span title="%s" class="flag-icon ui-icon ui-icon-%s"></span>'
@@ -40,19 +45,20 @@ FLAG_TEMPLATE = '<span title="%s" class="flag-icon ui-icon ui-icon-%s"></span>'
 
 class UnitManager(models.Manager):
     def update_from_unit(self, translation, unit, pos):
-        '''
+        """
         Process translation toolkit unit and stores/updates database entry.
-        '''
+        """
         # Get basic unit data
         src = unit.get_source()
         ctx = unit.get_context()
         checksum = unit.get_checksum()
+        created = False
 
         # Try getting existing unit
         dbunit = None
+        created = False
         try:
             dbunit = translation.unit_set.get(checksum=checksum)
-            created = False
         except Unit.MultipleObjectsReturned:
             # Some inconsistency (possibly race condition), try to recover
             dbunit = translation.unit_set.filter(checksum=checksum).delete()
@@ -76,10 +82,9 @@ class UnitManager(models.Manager):
         return dbunit, created
 
     def filter_checks(self, rqtype, translation, ignored=False):
-        '''
+        """
         Filtering for checks.
-        '''
-        from weblate.trans.models.unitdata import Check
+        """
 
         # Filter checks for current project
         checks = Check.objects.filter(
@@ -117,10 +122,9 @@ class UnitManager(models.Manager):
         return ret
 
     def filter_type(self, rqtype, translation, ignored=False):
-        '''
+        """
         Basic filtering based on unit state or failed checks.
-        '''
-        from weblate.trans.models.unitdata import Comment
+        """
 
         if rqtype == 'fuzzy':
             return self.filter(fuzzy=True)
@@ -144,9 +148,9 @@ class UnitManager(models.Manager):
             return self.all()
 
     def count_type(self, rqtype, translation):
-        '''
+        """
         Cached counting of failing checks (and other stats).
-        '''
+        """
         # Use precalculated data if we can
         if rqtype == 'all':
             return translation.total
@@ -177,12 +181,11 @@ class UnitManager(models.Manager):
         return ret
 
     def review(self, date, user):
-        '''
+        """
         Returns units touched by other users since given time.
-        '''
+        """
         if user.is_anonymous():
             return self.none()
-        from weblate.trans.models.changes import Change
         try:
             sample = self.all()[0]
         except IndexError:
@@ -194,9 +197,9 @@ class UnitManager(models.Manager):
         return self.filter(id__in=changes.values_list('unit__id', flat=True))
 
     def search(self, params):
-        '''
+        """
         High level wrapper for searching.
-        '''
+        """
 
         if params['search'] in ('exact', 'substring'):
             queries = []
@@ -231,11 +234,11 @@ class UnitManager(models.Manager):
 
     def fulltext(self, query, source=True, context=True, translation=True,
                  checksums=False):
-        '''
+        """
         Performs full text search on defined set of fields.
 
         Returns queryset unless checksums is set.
-        '''
+        """
 
         lang = self.all()[0].translation.language.code
         ret = fulltext_search(query, lang, source, context, translation)
@@ -246,9 +249,9 @@ class UnitManager(models.Manager):
         return self.filter(checksum__in=ret)
 
     def same_source(self, unit):
-        '''
+        """
         Finds units with same source.
-        '''
+        """
         checksums = fulltext_search(
             unit.get_source_plurals()[0],
             unit.translation.language.code,
@@ -264,9 +267,9 @@ class UnitManager(models.Manager):
         )
 
     def more_like_this(self, unit, top=5):
-        '''
+        """
         Finds closely similar units.
-        '''
+        """
         more_results = more_like(unit.checksum, unit.source, top)
 
         same_results = fulltext_search(
@@ -286,9 +289,9 @@ class UnitManager(models.Manager):
         )
 
     def same(self, unit):
-        '''
+        """
         Units with same source within same project.
-        '''
+        """
         project = unit.translation.subproject.project
         return self.filter(
             checksum=unit.checksum,
@@ -298,7 +301,7 @@ class UnitManager(models.Manager):
 
 
 class Unit(models.Model):
-    translation = models.ForeignKey(Translation)
+    translation = models.ForeignKey('Translation')
     checksum = models.CharField(max_length=40, db_index=True)
     contentsum = models.CharField(max_length=40, db_index=True)
     location = models.TextField(default='', blank=True)
@@ -318,35 +321,38 @@ class Unit(models.Model):
 
     num_words = models.IntegerField(default=0)
 
+    priority = models.IntegerField(default=100, db_index=True)
+
     objects = UnitManager()
 
-    class Meta:
+    class Meta(object):
         permissions = (
             ('save_translation', "Can save translation"),
         )
-        ordering = ['position']
+        ordering = ['priority', 'position']
         app_label = 'trans'
 
     def __init__(self, *args, **kwargs):
-        '''
+        """
         Constructor to initialize some cache properties.
-        '''
+        """
         super(Unit, self).__init__(*args, **kwargs)
         self._all_flags = None
+        self._source_info = None
         self.old_translated = self.translated
         self.old_fuzzy = self.fuzzy
 
     def has_acl(self, user):
-        '''
+        """
         Checks whether current user is allowed to access this
         subproject.
-        '''
+        """
         return self.translation.subproject.project.has_acl(user)
 
     def check_acl(self, request):
-        '''
+        """
         Raises an error if user is not allowed to access this project.
-        '''
+        """
         self.translation.subproject.project.check_acl(request)
 
     def __unicode__(self):
@@ -361,9 +367,9 @@ class Unit(models.Model):
         )
 
     def update_from_unit(self, unit, pos, created):
-        '''
+        """
         Updates Unit from ttkit unit.
-        '''
+        """
         # Store current values for use in Translation.check_sync
         self.old_fuzzy = self.fuzzy
         self.old_translated = self.translated
@@ -415,6 +421,12 @@ class Unit(models.Model):
                 previous_source == self.previous_source):
             return
 
+        # Ensure we track source string
+        source_info, source_created = Source.objects.get_or_create(
+            checksum=self.checksum,
+            subproject=self.translation.subproject
+        )
+
         # Store updated values
         self.position = pos
         self.location = location
@@ -426,6 +438,7 @@ class Unit(models.Model):
         self.comment = comment
         self.contentsum = contentsum
         self.previous_source = previous_source
+        self.priority = source_info.priority
         self.save(
             force_insert=created,
             backend=True,
@@ -433,16 +446,8 @@ class Unit(models.Model):
             same_state=same_state
         )
 
-        # Ensure we track source string
-        dummy, created = Source.objects.get_or_create(
-            checksum=self.checksum,
-            subproject=self.translation.subproject
-        )
-
         # Create change object for new source string
-        if created:
-            from weblate.trans.models.changes import Change
-
+        if source_created:
             Change.objects.create(
                 translation=self.translation,
                 action=Change.ACTION_NEW_SOURCE,
@@ -450,21 +455,21 @@ class Unit(models.Model):
             )
 
     def is_plural(self):
-        '''
+        """
         Checks whether message is plural.
-        '''
+        """
         return is_plural(self.source)
 
     def get_source_plurals(self):
-        '''
+        """
         Returns source plurals in array.
-        '''
+        """
         return split_plural(self.source)
 
     def get_target_plurals(self):
-        '''
+        """
         Returns target plurals in array.
-        '''
+        """
         # Is this plural?
         if not self.is_plural():
             return [self.target]
@@ -488,9 +493,9 @@ class Unit(models.Model):
         return ret
 
     def propagate(self, request, change_action=None):
-        '''
+        """
         Propagates current translation to all others.
-        '''
+        """
         allunits = Unit.objects.same(self).exclude(id=self.id).filter(
             translation__subproject__allow_translation_propagation=True
         )
@@ -501,16 +506,11 @@ class Unit(models.Model):
 
     def save_backend(self, request, propagate=True, gen_change=True,
                      change_action=None, user=None):
-        '''
+        """
         Stores unit to backend.
 
         Optional user parameters defines authorship of a change.
-        '''
-        from weblate.accounts.models import (
-            notify_new_translation, notify_new_contributor
-        )
-        from weblate.trans.models.changes import Change
-
+        """
         # Update lock timestamp
         self.translation.update_lock(request)
 
@@ -581,14 +581,6 @@ class Unit(models.Model):
         user.profile.translated += 1
         user.profile.save()
 
-        # Notify about new contributor
-        user_changes = Change.objects.filter(
-            translation=self.translation,
-            user=request.user
-        )
-        if not user_changes.exists():
-            notify_new_contributor(self, request.user)
-
         # Generate Change object for this change
         if gen_change:
             self.generate_change(request, user, oldunit, change_action)
@@ -611,10 +603,16 @@ class Unit(models.Model):
         return True
 
     def generate_change(self, request, author, oldunit, change_action):
-        '''
+        """
         Creates Change entry for saving unit.
-        '''
-        from weblate.trans.models.changes import Change
+        """
+        # Notify about new contributor
+        user_changes = Change.objects.filter(
+            translation=self.translation,
+            user=request.user
+        )
+        if not user_changes.exists():
+            notify_new_contributor(self, request.user)
 
         # Action type to store
         if change_action is not None:
@@ -641,10 +639,10 @@ class Unit(models.Model):
         )
 
     def save(self, *args, **kwargs):
-        '''
+        """
         Wrapper around save to warn when save did not come from
         git backend (eg. commit or by parsing file).
-        '''
+        """
         # Warn if request is not coming from backend
         if 'backend' not in kwargs:
             weblate.logger.error(
@@ -661,7 +659,7 @@ class Unit(models.Model):
         force_insert = kwargs.get('force_insert', False)
 
         # Store number of words
-        if not same_content:
+        if not same_content or not self.num_words:
             self.num_words = len(self.get_source_plurals()[0].split())
 
         # Actually save the unit
@@ -669,16 +667,16 @@ class Unit(models.Model):
 
         # Update checks if content or fuzzy flag has changed
         if not same_content or not same_state:
-            self.check(same_state, same_content, force_insert)
+            self.run_checks(same_state, same_content, force_insert)
 
         # Update fulltext index if content has changed or this is a new unit
         if force_insert or not same_content:
             update_index_unit(self, force_insert)
 
     def get_location_links(self):
-        '''
+        """
         Generates links to source files where translation was used.
-        '''
+        """
         ret = []
 
         # Do we have any locations?
@@ -708,10 +706,9 @@ class Unit(models.Model):
         return mark_safe('\n'.join(ret))
 
     def suggestions(self):
-        '''
+        """
         Returns all suggestions for this unit.
-        '''
-        from weblate.trans.models.unitdata import Suggestion
+        """
         return Suggestion.objects.filter(
             contentsum=self.contentsum,
             project=self.translation.subproject.project,
@@ -719,10 +716,9 @@ class Unit(models.Model):
         )
 
     def cleanup_checks(self, source, target):
-        '''
+        """
         Cleanups listed source and target checks.
-        '''
-        from weblate.trans.models.unitdata import Check
+        """
         if len(source) == 0 and len(target) == 0:
             return False
         todelete = Check.objects.filter(
@@ -738,10 +734,9 @@ class Unit(models.Model):
         return False
 
     def checks(self):
-        '''
+        """
         Returns all checks for this unit (even ignored).
-        '''
-        from weblate.trans.models.unitdata import Check
+        """
         return Check.objects.filter(
             contentsum=self.contentsum,
             project=self.translation.subproject.project,
@@ -749,10 +744,9 @@ class Unit(models.Model):
         )
 
     def source_checks(self):
-        '''
+        """
         Returns all source checks for this unit (even ignored).
-        '''
-        from weblate.trans.models.unitdata import Check
+        """
         return Check.objects.filter(
             contentsum=self.contentsum,
             project=self.translation.subproject.project,
@@ -760,10 +754,9 @@ class Unit(models.Model):
         )
 
     def active_checks(self):
-        '''
+        """
         Returns all active (not ignored) checks for this unit.
-        '''
-        from weblate.trans.models.unitdata import Check
+        """
         return Check.objects.filter(
             contentsum=self.contentsum,
             project=self.translation.subproject.project,
@@ -772,10 +765,9 @@ class Unit(models.Model):
         )
 
     def active_source_checks(self):
-        '''
+        """
         Returns all active (not ignored) source checks for this unit.
-        '''
-        from weblate.trans.models.unitdata import Check
+        """
         return Check.objects.filter(
             contentsum=self.contentsum,
             project=self.translation.subproject.project,
@@ -784,10 +776,9 @@ class Unit(models.Model):
         )
 
     def get_comments(self):
-        '''
+        """
         Returns list of target comments.
-        '''
-        from weblate.trans.models.unitdata import Comment
+        """
         return Comment.objects.filter(
             contentsum=self.contentsum,
             project=self.translation.subproject.project,
@@ -795,10 +786,9 @@ class Unit(models.Model):
         )
 
     def get_source_comments(self):
-        '''
+        """
         Returns list of target comments.
-        '''
-        from weblate.trans.models.unitdata import Comment
+        """
         return Comment.objects.filter(
             contentsum=self.contentsum,
             project=self.translation.subproject.project,
@@ -806,11 +796,11 @@ class Unit(models.Model):
         )
 
     def get_checks_to_run(self, same_state, is_new):
-        '''
+        """
         Returns list of checks to run on state change.
 
-        Returns tupe of checks to run and whether to do cleanup.
-        '''
+        Returns tuple of checks to run and whether to do cleanup.
+        """
         checks_to_run = CHECKS
         cleanup_checks = True
 
@@ -847,14 +837,12 @@ class Unit(models.Model):
 
             cleanup_checks = False
 
-        return (checks_to_run, cleanup_checks)
+        return checks_to_run, cleanup_checks
 
-    def check(self, same_state=True, same_content=True, is_new=False):
-        '''
+    def run_checks(self, same_state=True, same_content=True, is_new=False):
+        """
         Updates checks for this unit.
-        '''
-        from weblate.trans.models.unitdata import Check
-
+        """
         was_change = False
 
         checks_to_run, cleanup_checks = self.get_checks_to_run(
@@ -918,9 +906,9 @@ class Unit(models.Model):
             self.update_has_failing_check(was_change)
 
     def update_has_failing_check(self, recurse=False):
-        '''
+        """
         Updates flag counting failing checks.
-        '''
+        """
         has_failing_check = self.translated and self.active_checks().exists()
 
         # Change attribute if it has changed
@@ -941,9 +929,9 @@ class Unit(models.Model):
                 unit.update_has_failing_check(False)
 
     def update_has_suggestion(self):
-        '''
+        """
         Updates flag counting suggestions.
-        '''
+        """
         has_suggestion = len(self.suggestions()) > 0
         if has_suggestion != self.has_suggestion:
             self.has_suggestion = has_suggestion
@@ -953,9 +941,9 @@ class Unit(models.Model):
             self.translation.update_stats()
 
     def update_has_comment(self):
-        '''
+        """
         Updates flag counting comments.
-        '''
+        """
         has_comment = len(self.get_comments()) > 0
         if has_comment != self.has_comment:
             self.has_comment = has_comment
@@ -965,9 +953,9 @@ class Unit(models.Model):
             self.translation.update_stats()
 
     def nearby(self):
-        '''
+        """
         Returns list of nearby messages based on location.
-        '''
+        """
         return Unit.objects.filter(
             translation=self.translation,
             position__gte=self.position - appsettings.NEARBY_MESSAGES,
@@ -975,24 +963,24 @@ class Unit(models.Model):
         ).select_related()
 
     def can_vote_suggestions(self):
-        '''
+        """
         Whether we can vote for suggestions.
-        '''
+        """
         return self.translation.subproject.suggestion_voting
 
     def only_vote_suggestions(self):
-        '''
+        """
         Whether we can vote for suggestions.
-        '''
+        """
         return (
             self.translation.subproject.suggestion_voting
             and self.translation.subproject.suggestion_autoaccept > 0
         )
 
     def translate(self, request, new_target, new_fuzzy):
-        '''
+        """
         Stores new translation of a unit.
-        '''
+        """
         # Update unit and save it
         self.target = join_plural(new_target)
         self.fuzzy = new_fuzzy
@@ -1002,9 +990,9 @@ class Unit(models.Model):
 
     @property
     def all_flags(self):
-        '''
+        """
         Returns union of own and subproject flags.
-        '''
+        """
         if self._all_flags is None:
             self._all_flags = set(
                 self.flags.split(',')
@@ -1013,9 +1001,9 @@ class Unit(models.Model):
         return self._all_flags
 
     def get_state_flags(self):
-        '''
+        """
         Returns state flags.
-        '''
+        """
         flags = []
 
         if self.fuzzy:
@@ -1049,14 +1037,31 @@ class Unit(models.Model):
             '\n'.join([FLAG_TEMPLATE % flag for flag in flags])
         )
 
-    def get_source_string_info(self):
-        '''
+    @property
+    def source_info(self):
+        """
         Returns related source string object.
-        '''
-        try:
-            return Source.objects.get(
+        """
+        if self._source_info is None:
+            self._source_info = Source.objects.get(
                 checksum=self.checksum,
                 subproject=self.translation.subproject
             )
-        except Source.DoesNotExist:
-            return None
+        return self._source_info
+
+    def get_secondary_units(self, user):
+        '''
+        Returns list of secondary units.
+        '''
+        secondary_langs = user.profile.secondary_languages.exclude(
+            id=self.translation.language.id
+        )
+        project = self.translation.subproject.project
+        return get_distinct_translations(
+            Unit.objects.filter(
+                checksum=self.checksum,
+                translated=True,
+                translation__subproject__project=project,
+                translation__language__in=secondary_langs,
+            )
+        )

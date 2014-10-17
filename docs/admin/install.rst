@@ -9,7 +9,7 @@ Requirements
 ------------
 
 Python (2.7)
-    http://www.python.org/
+    https://www.python.org/
 Django (>= 1.5) (Django 1.6 is supported since Weblate 1.9)
     https://www.djangoproject.com/
 Translate-toolkit (>= 1.9.0, 1.10.0 or newer strongly recommended)
@@ -18,20 +18,22 @@ GitPython (>= 0.3.2)
     https://github.com/gitpython-developers/GitPython
 Git (>= 1.7.2)
     http://git-scm.com/
-python-social-auth (>= 0.1.17)
+python-social-auth (>= 0.1.17, < 0.1.24)
     http://psa.matiasaguirre.net/
 Whoosh (>= 2.5, 2.5.2 is recommended)
     http://bitbucket.org/mchaput/whoosh/
 PIL or Pillow library
-    http://python-imaging.github.io/
+    https://python-pillow.github.io/
 lxml (>= 3.1.0)
     http://lxml.de/
-south
+South (>= 1.0)
     http://south.aeracode.org/
 libravatar (optional for federated avatar support)
     https://pypi.python.org/pypi/pyLibravatar
 PyICU (optional for proper sorting of strings)
     https://pypi.python.org/pypi/PyICU
+babel (optional for Android resources support)
+    http://babel.pocoo.org/
 Database backend
     Any database supported in Django will work, check their documentation for more details.
 
@@ -44,7 +46,8 @@ you can use apt-get:
 .. code-block:: sh
 
     apt-get install python-django translate-toolkit python-git \
-        python-whoosh python-pil python-django-south python-libravatar python-pyicu
+        python-whoosh python-pil python-django-south python-libravatar \
+        python-pyicu python-babel
 
     # Optional for database backend
 
@@ -73,7 +76,8 @@ All requirements are available either directly in openSUSE or in
 .. code-block:: sh
 
     zypper install python-Django python-icu translate-toolkit python-GitPython \
-        python-Whoosh python-Pillow python-South python-python-social-auth
+        python-Whoosh python-Pillow python-South python-python-social-auth \
+        python-babel
 
 
 Requirements on OSX
@@ -98,20 +102,26 @@ Most requirements can be also installed using pip installer:
 
     pip install -r requirements.txt
 
-Also you will need header files for ``python-dev``, ``libxml2`` and ``libxslt``
-to compile some of the required Python modules.
+Also you will need header files for ``python-dev``, ``libxml2``, ``libxslt``
+and ``libfreetype6`` to compile some of the required Python modules.
+
+All optional dependencies (see above) can be installed using:
+
+.. code-block:: sh
+
+    pip install -r requirements-optional.txt
 
 On Debian or Ubuntu you can install them using:
 
 .. code-block:: sh
 
-    apt-get install libxml2-dev libxslt-dev python-dev
+    apt-get install libxml2-dev libxslt-dev libfreetype6-dev python-dev
 
 On openSUSE or SLES you can install them using:
 
 .. code-block:: sh
 
-    zypper install libxslt-devel libxml2-devel python-devel
+    zypper install libxslt-devel libxml2-devel freetype-devel python-devel
 
 .. _file-permissions:
 
@@ -173,7 +183,10 @@ options:
 
             CREATE DATABASE <dbname> CHARACTER SET utf8;
 
-    .. seealso:: https://docs.djangoproject.com/en/1.6/ref/settings/#databases, https://docs.djangoproject.com/en/1.4/ref/databases/
+    .. seealso:: 
+        
+        https://docs.djangoproject.com/en/1.6/ref/settings/#databases, 
+        https://docs.djangoproject.com/en/1.6/ref/databases/
 
 ``DEBUG``
 
@@ -438,8 +451,16 @@ Home directory
 ++++++++++++++
 
 The home directory for user which is running Weblate should be existing and
-writable by this user. This is especially needed if you want to use SSH 
-to access private repositories.
+writable by this user. This is especially needed if you want to use SSH to
+access private repositories, but Git might need to access this directory as
+well (depends on Git version you use).
+
+You can change the directory used by Weblate in :file:`settings.py`, for
+example to set it to ``configuration`` directory under Weblate tree:
+
+.. code-block:: python
+
+    os.environ['HOME'] = os.path.join(WEB_ROOT, 'configuration')
 
 .. note::
 
@@ -450,6 +471,26 @@ to access private repositories.
     different user or change this setting.
 
 .. seealso:: :ref:`private`
+
+.. _production-templates:
+
+Template loading
+++++++++++++++++
+
+It is recommended to use cached template loader for Django. It caches parsed
+templates and avoids need to do the parsing with every single request. You can
+configure it using following snippet:
+
+.. code-block:: python
+
+    TEMPLATE_LOADERS = (
+        ('django.template.loaders.cached.Loader', (
+            'django.template.loaders.filesystem.Loader',
+            'django.template.loaders.app_directories.Loader',
+        )),
+    )
+
+.. seealso:: `Django documentation on template loading <https://docs.djangoproject.com/en/1.6/ref/templates/api/#django.template.loaders.cached.Loader>`_
 
 .. _server:
 

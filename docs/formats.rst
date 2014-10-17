@@ -36,7 +36,10 @@ supported by Weblate and still has best support.
 Weblate supports contextual information stored in the file, adjusting it's
 headers or linking to corresponding source files.
 
-.. seealso:: https://en.wikipedia.org/wiki/Gettext, http://docs.translatehouse.org/projects/translate-toolkit/en/latest/formats/po.html
+.. seealso::
+
+   `Gettext on Wikipedia <https://en.wikipedia.org/wiki/Gettext>`_,
+   `Gettext in translate-toolkit documentation <http://docs.translatehouse.org/projects/translate-toolkit/en/latest/formats/po.html>`_
 
 Monolingual Gettext
 +++++++++++++++++++
@@ -58,7 +61,10 @@ is one of many standards in this area.
 
 XLIFF is usually used as bilingual.
 
-.. seealso:: https://en.wikipedia.org/wiki/XLIFF, http://docs.translatehouse.org/projects/translate-toolkit/en/latest/formats/xliff.html
+.. seealso::
+
+    `XLIFF on Wikipedia <https://en.wikipedia.org/wiki/XLIFF>`_,
+    `XLIFF in translate-toolkit documentation <http://docs.translatehouse.org/projects/translate-toolkit/en/latest/formats/xliff.html>`_
 
 Java properties
 ---------------
@@ -69,7 +75,10 @@ Native Java format for translations.
 
 Java properties are usually used as bilingual.
 
-.. seealso:: https://en.wikipedia.org/wiki/.properties, http://docs.translatehouse.org/projects/translate-toolkit/en/latest/formats/properties.html
+.. seealso::
+
+    `Java properties on Wikipedia <https://en.wikipedia.org/wiki/.properties>`_,
+    `Java properties in translate-toolkit documentation <http://docs.translatehouse.org/projects/translate-toolkit/en/latest/formats/properties.html>`_
 
 Qt Linguist .ts
 ---------------
@@ -80,7 +89,10 @@ Translation format used in Qt based applications.
 
 Qt Linguist files are used as both bilingual and monolingual.
 
-.. seealso:: http://qt-project.org/doc/qt-4.8/linguist-manual.html, http://docs.translatehouse.org/projects/translate-toolkit/en/latest/formats/ts.html
+.. seealso::
+
+    `Qt Linguist manual <http://qt-project.org/doc/qt-4.8/linguist-manual.html>`_,
+    `Qt .ts in translate-toolkit documentation <http://docs.translatehouse.org/projects/translate-toolkit/en/latest/formats/ts.html>`_
 
 .. _aresource:
 
@@ -91,16 +103,42 @@ Android string resources
 
 Android specific file format for translating applications.
 
-Android string resources are monolingual, the 
+Android string resources are monolingual, the
 :guilabel:`Monolingual base language file` file being stored in different
 location than others :file:`res/values/strings.xml`.
 
-.. seealso:: https://developer.android.com/guide/topics/resources/string-resource.html
+.. seealso::
+
+    `Android string resources documentation <https://developer.android.com/guide/topics/resources/string-resource.html>`_,
+    `Android string resources in translate-toolkit documentation <http://docs.translatehouse.org/projects/translate-toolkit/en/latest/formats/android.html>`_
 
 .. note::
 
-    This format is not yet supported by Translate-toolkit (merge request is
-    pending), but Weblate includes own support for it.
+    Android `string-array` structures are not currently supported. To work around this,
+    you can break you string arrays apart:
+
+    .. code-block:: xml
+
+        <string-array name="several_strings">
+            <item>First string</item>
+            <item>Second string</item>
+        </string-array>
+
+    become:
+
+    .. code-block:: xml
+
+        <string-array name="several_strings">
+            <item>@string/several_strings_0</item>
+            <item>@string/several_strings_1</item>
+        </string-array>
+        <string name="several_strings_0">First string</string>
+        <string name="several_strings_1">Second string</string>
+
+    The `string-array` that points to the `string` elements should be stored in a different
+    file, and not localized.
+
+    This script may help pre-process your existing strings.xml files and translations: https://gist.github.com/paour/11291062
 
 .. _apple:
 
@@ -114,7 +152,10 @@ and :index:`iPhone <pair: iPhone; translation>`/:index:`iPad <pair: iPad; transl
 
 Apple OS X strings are usually used as bilingual.
 
-.. seealso:: https://developer.apple.com/library/mac/#documentation/MacOSX/Conceptual/BPInternational/Articles/StringsFiles.html, http://docs.translatehouse.org/projects/translate-toolkit/en/latest/formats/strings.html
+.. seealso::
+
+    `Apple Strings Files documentation <https://developer.apple.com/library/mac/#documentation/MacOSX/Conceptual/BPInternational/Articles/StringsFiles.html>`_,
+    `Apple strings in translate-toolkit documentation <http://docs.translatehouse.org/projects/translate-toolkit/en/latest/formats/strings.html>`_
 
 .. note::
 
@@ -142,8 +183,26 @@ Sample file which should work:
 
     $string['foo'] = 'This is foo string';
 
-.. seealso:: http://docs.translatehouse.org/projects/translate-toolkit/en/latest/formats/php.html
+.. seealso::
 
+    `PHP files in translate-toolkit documentation <http://docs.translatehouse.org/projects/translate-toolkit/en/latest/formats/php.html>`_
+
+JSON files
+----------
+
+.. index:: single: JSON; files
+
+.. versionadded:: 2.0
+
+JSON is format used mostly for translating applications implemented in
+Javascript.
+
+JSON translations are usually monolingual, so it is recommended to specify base
+file with English strings.
+
+.. seealso::
+
+   `JSON in translate-toolkit documentation <http://docs.translatehouse.org/projects/translate-toolkit/en/latest/formats/json.html>`_
 
 Others
 ------
@@ -152,5 +211,5 @@ As already mentioned, all Translate-toolkit formats are supported, but they
 did not (yet) receive deeper testing.
 
 .. seealso:: `Supported formats in translate-toolkit`_
-   
+
 .. _Supported formats in translate-toolkit: http://docs.translatehouse.org/projects/translate-toolkit/en/latest/formats/index.html

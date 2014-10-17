@@ -19,14 +19,14 @@
 #
 
 from django.conf import settings
-from weblate.trans.util import get_script_name
+from weblate.trans.scripts import get_script_name
 import os
 
 
 def get(name, default):
-    '''
+    """
     Returns setting from django settings with default value.
-    '''
+    """
     return getattr(settings, name, default)
 
 
@@ -58,7 +58,7 @@ MT_GOOGLE_KEY = get('MT_GOOGLE_KEY', None)
 MT_TMSERVER = get('MT_TMSERVER', None)
 
 # Path where git repositories are stored, it needs to be writable
-GIT_ROOT = get('GIT_ROOT', '%s/repos/' % WEB_ROOT)
+GIT_ROOT = get('GIT_ROOT', os.path.join(WEB_ROOT, 'repos'))
 
 # Title of site to use
 SITE_TITLE = get('SITE_TITLE', 'Weblate')
@@ -71,6 +71,9 @@ DEMO_SERVER = get('DEMO_SERVER', False)
 
 # Enable remote hooks
 ENABLE_HOOKS = get('ENABLE_HOOKS', True)
+
+# Enable sharing
+ENABLE_SHARING = get('ENABLE_SHARING', True)
 
 # Whether to run hooks in background
 BACKGROUND_HOOKS = get('BACKGROUND_HOOKS', True)
@@ -177,3 +180,5 @@ AVATAR_DEFAULT_IMAGE = get('AVATAR_DEFAULT_IMAGE', 'identicon')
 
 # Is the site using https
 ENABLE_HTTPS = get('ENABLE_HTTPS', False)
+
+ENABLE_WHITEBOARD = get('ENABLE_WHITEBOARD', False)
