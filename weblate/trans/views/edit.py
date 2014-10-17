@@ -27,8 +27,9 @@ from django.utils import formats
 import uuid
 import time
 
-from weblate.trans.models import SubProject, Unit, Change
-from weblate.trans.models.unitdata import Comment, Suggestion
+from weblate.trans.models import (
+    SubProject, Unit, Change, Comment, Suggestion, Dictionary
+)
 from weblate.trans.autofixes import fix_target
 from weblate.trans.forms import (
     TranslationForm, SearchForm,
@@ -599,6 +600,7 @@ def translate(request, project, subproject, lang):
             'prev_unit_url': base_unit_url + str(offset - 1),
             'object': translation,
             'unit': unit,
+            'others': Unit.objects.same(unit).exclude(target=unit.target),
             'total': translation.unit_set.all().count(),
             'search_id': search_result['search_id'],
             'search_query': search_result['query'],
@@ -615,6 +617,7 @@ def translate(request, project, subproject, lang):
             'locked': locked,
             'user_locked': user_locked,
             'project_locked': project_locked,
+            'glossary': Dictionary.objects.get_words(unit),
         }
     )
 
@@ -675,7 +678,7 @@ def auto_translation(request, project, subproject, lang):
                 # Save unit to backend
                 unit.save_backend(request, False, False)
 
-        messages.info(request, _('Automatic translation completed.'))
+        messages.success(request, _('Automatic translation completed.'))
     else:
         messages.error(request, _('Failed to process form!'))
 
@@ -689,21 +692,21 @@ def comment(request, pk):
     '''
     translation = get_object_or_404(Unit, pk=pk)
     translation.check_acl(request)
-    if request.POST.get('type', '') == 'source':
-        lang = None
-    else:
-        lang = translation.translation.language
 
     form = CommentForm(request.POST)
 
     if form.is_valid():
+        if form.cleaned_data['scope'] == 'global':
+            lang = None
+        else:
+            lang = translation.translation.language
         Comment.objects.add(
             translation,
             request.user,
             lang,
             form.cleaned_data['comment']
         )
-        messages.info(request, _('Posted new comment'))
+        messages.success(request, _('Posted new comment'))
     else:
         messages.error(request, _('Failed to add comment!'))
 
@@ -737,7 +740,6 @@ def get_zen_unitdata(translation, request):
         (unit, TranslationForm(
             translation,
             unit,
-            auto_id='id_{0}_%s'.format(unit.checksum),
             tabindex=100 + (unit.position * 10),
         ))
         for unit in units

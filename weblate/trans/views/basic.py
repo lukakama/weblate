@@ -65,8 +65,7 @@ def home(request):
         )
         return redirect('password')
 
-    wb_messages = WhiteboardMessage.objects.order_by(
-        'message')
+    wb_messages = WhiteboardMessage.objects.all()
 
     projects = Project.objects.all_acl(request.user)
     if projects.count() == 1:
@@ -81,15 +80,6 @@ def home(request):
             request,
             _('Please set your full name in your profile.')
         )
-
-    # Load user translations if user is authenticated
-    usertranslations = None
-    if request.user.is_authenticated():
-        usertranslations = Translation.objects.filter(
-            language__in=request.user.profile.languages.all()
-        ).order_by(
-            'subproject__project__name', 'subproject__name'
-        ).select_related()
 
     # Some stats
     top_translations = Profile.objects.order_by('-translated')[:10]
@@ -106,7 +96,6 @@ def home(request):
             'last_changes': last_changes,
             'last_changes_rss': reverse('rss'),
             'last_changes_url': '',
-            'usertranslations': usertranslations,
             'search_form': SearchForm(),
             'whiteboard_messages': wb_messages,
         }
@@ -151,7 +140,7 @@ def search(request):
             # results.
             units = paginator.page(paginator.num_pages)
 
-        context['units'] = units
+        context['page_obj'] = units
         context['title'] = _('Search for %s') % (
             search_form.cleaned_data['q']
         )
@@ -217,11 +206,23 @@ def show_engage(request, project, lang=None):
 def show_project(request, project):
     obj = get_project(request, project)
 
-    dicts = Dictionary.objects.filter(
+    dict_langs = Dictionary.objects.filter(
         project=obj
     ).values_list(
         'language', flat=True
     ).distinct()
+
+    dicts = []
+    for language in Language.objects.filter(id__in=dict_langs):
+        dicts.append(
+            {
+                'language': language,
+                'count': Dictionary.objects.filter(
+                    language=language,
+                    project=obj
+                ).count(),
+            }
+        )
 
     last_changes = Change.objects.prefetch().filter(
         Q(translation__subproject__project=obj) |
@@ -233,7 +234,7 @@ def show_project(request, project):
         'project.html',
         {
             'object': obj,
-            'dicts': Language.objects.filter(id__in=dicts),
+            'dicts': dicts,
             'last_changes': last_changes,
             'last_changes_rss': reverse(
                 'rss-project',
@@ -335,7 +336,6 @@ def not_found(request):
         {
             'request_path': request.path,
             'title': _('Page Not Found'),
-            'projects': Project.objects.all_acl(request.user),
         },
         status=404
     )
@@ -351,7 +351,6 @@ def denied(request):
         {
             'request_path': request.path,
             'title': _('Permission Denied'),
-            'projects': Project.objects.all_acl(request.user),
         },
         status=403
     )
@@ -416,7 +415,6 @@ def data_root(request):
             'hooks_docs': weblate.get_doc_url('api', 'hooks'),
             'api_docs': weblate.get_doc_url('api', 'exports'),
             'rss_docs': weblate.get_doc_url('api', 'rss'),
-            'projects': Project.objects.all_acl(request.user),
         }
     )
 
@@ -451,7 +449,7 @@ def new_language(request, project, subproject):
             )
         elif obj.project.new_lang == 'contact':
             notify_new_language(obj, language, request.user)
-            messages.info(
+            messages.success(
                 request,
                 _(
                     "A request for a new translation has been "

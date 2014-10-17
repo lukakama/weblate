@@ -24,18 +24,16 @@ from django.core.mail import mail_admins
 from django.core.exceptions import ValidationError
 from django.contrib import messages
 from django.core.urlresolvers import reverse
+from django.core.cache import cache
 from django.utils import timezone
 from glob import glob
 import os
 import weblate
-import git
-from gitdb.exc import ODBError
 from weblate.trans.formats import FILE_FORMAT_CHOICES, FILE_FORMATS
 from weblate.trans.mixins import PercentMixin, URLMixin, PathMixin
 from weblate.trans.filelock import FileLock
-from weblate.trans.util import is_repo_link
-from weblate.trans.util import get_site_url
-from weblate.trans.util import sleep_while_git_locked
+from weblate.trans.util import is_repo_link, get_site_url
+from weblate.trans.vcs import GitRepository, RepositoryException
 from weblate.trans.models.translation import Translation
 from weblate.trans.validators import (
     validate_repoweb, validate_filemask,
@@ -46,23 +44,6 @@ from weblate.lang.models import Language
 from weblate.appsettings import SCRIPT_CHOICES
 from weblate.accounts.models import notify_merge_failure
 from weblate.trans.models.changes import Change
-
-
-def validate_repo(val):
-    '''
-    Validates Git URL, and special weblate:// links.
-    '''
-    try:
-        repo = SubProject.objects.get_linked(val)
-        if repo is not None and repo.is_repo_link:
-            raise ValidationError(_('Can not link to linked repository!'))
-    except (SubProject.DoesNotExist, ValueError):
-        raise ValidationError(
-            _(
-                'Invalid link to Weblate project, '
-                'use weblate://project/subproject.'
-            )
-        )
 
 
 class SubProjectManager(models.Manager):
@@ -78,7 +59,7 @@ class SubProjectManager(models.Manager):
 
 class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
     name = models.CharField(
-        verbose_name=ugettext_lazy('Subproject name'),
+        verbose_name=ugettext_lazy('Resource name'),
         max_length=100,
         help_text=ugettext_lazy('Name to display')
     )
@@ -95,10 +76,9 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         verbose_name=ugettext_lazy('Git repository'),
         max_length=200,
         help_text=ugettext_lazy(
-            'URL of Git repository, use weblate://project/subproject '
-            'for sharing with other subproject.'
+            'URL of Git repository, use weblate://project/resource '
+            'for sharing with other resource.'
         ),
-        validators=[validate_repo],
     )
     push = models.CharField(
         verbose_name=ugettext_lazy('Git push URL'),
@@ -204,15 +184,15 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         verbose_name=ugettext_lazy('Locked'),
         default=False,
         help_text=ugettext_lazy(
-            'Whether subproject is locked for translation updates.'
+            'Whether resource is locked for translation updates.'
         )
     )
     allow_translation_propagation = models.BooleanField(
         verbose_name=ugettext_lazy('Allow translation propagation'),
         default=True,
         help_text=ugettext_lazy(
-            'Whether translation updates in other subproject '
-            'will cause automatic translation in this project'
+            'Whether translation updates in other resources '
+            'will cause automatic translation in this one'
         )
     )
     save_history = models.BooleanField(
@@ -278,11 +258,11 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         super(SubProject, self).__init__(*args, **kwargs)
         self._lock = None
-        self._git_repo = None
         self._file_format = None
         self._template_store = None
         self._all_flags = None
         self._linked_subproject = None
+        self._repository = None
 
     def has_acl(self, user):
         '''
@@ -395,34 +375,40 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         return self._linked_subproject
 
     @property
-    def git_repo(self):
-        '''
-        Gets Git repository object.
-        '''
+    def repository(self):
+        """
+        VCS repository object.
+        """
         if self.is_repo_link:
-            return self.linked_subproject.git_repo
+            return self.linked_subproject.repository
 
-        if self._git_repo is None:
-            path = self.get_path()
-            try:
-                self._git_repo = git.Repo(path)
-            except Exception:
-                # Fallback to initializing the repository
-                self._git_repo = git.Repo.init(path)
+        if self._repository is None:
+            self._repository = GitRepository(self.get_path())
 
-        return self._git_repo
+        return self._repository
+
+    def clear_repo_cache(self):
+        """
+        Clears cached information on repository update.
+        """
+        cache.delete(
+            '{0}-last-commit'.format(self.get_full_slug())
+        )
 
     def get_last_remote_commit(self):
         '''
         Returns latest remote commit we know.
         '''
-        try:
-            return self.git_repo.commit('origin/%s' % self.branch)
-        except ODBError:
-            # Try to reread git database in case our in memory object is not
-            # up to date with it.
-            self.git_repo.odb.update_cache(True)
-            return self.git_repo.commit('origin/%s' % self.branch)
+        cache_key = '{0}-last-commit'.format(self.get_full_slug())
+
+        result = cache.get(cache_key)
+
+        if result is None:
+            result = self.repository.get_revision_info(
+                self.repository.last_remote_revision
+            )
+            cache.set(cache_key, result)
+        return result
 
     def get_repo_url(self):
         '''
@@ -476,16 +462,10 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         # Update
         weblate.logger.info('updating repo %s', self.__unicode__())
         try:
-            try:
-                self.git_repo.git.remote('update', 'origin')
-            except git.GitCommandError:
-                # There might be another attempt on pull in same time
-                # so we will sleep a bit an retry
-                sleep_while_git_locked()
-                self.git_repo.git.remote('update', 'origin')
-        except Exception as error:
+            self.repository.update_remote()
+        except RepositoryException as error:
             error_text = str(error)
-            weblate.logger.error('Failed to update Git repo: %s', error_text)
+            weblate.logger.error('Failed to update repository: %s', error_text)
             if validate:
                 if 'Host key verification failed' in error_text:
                     raise ValidationError(_(
@@ -493,7 +473,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                         'them in SSH page in the admin interface.'
                     ))
                 raise ValidationError(
-                    _('Failed to fetch git repository: %s') % error_text
+                    _('Failed to fetch repository: %s') % error_text
                 )
 
     def configure_repo(self, validate=False):
@@ -504,35 +484,12 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         if self.is_repo_link:
             return self.linked_subproject.configure_repo(validate)
 
-        # Create origin remote if it does not exist
-        if 'origin' not in self.git_repo.git.remote().split():
-            self.git_repo.git.remote('add', 'origin', self.repo)
+        self.repository.configure_remote(self.repo, self.push, self.branch)
+        self.repository.set_committer(
+            self.project.committer_name,
+            self.project.committer_email
+        )
 
-        if not self.repo.startswith('hg::'):
-            # Set remote URL
-            self.git_repo.git.remote('set-url', 'origin', self.repo)
-
-            # Set branch to track
-            # We first need to add one to ensure there is at least one branch
-            self.git_repo.git.remote(
-                'set-branches', '--add', 'origin', self.branch
-            )
-            # Then we can set to track just one
-            self.git_repo.git.remote('set-branches', 'origin', self.branch)
-
-        # Get object for remote
-        origin = self.git_repo.remotes.origin
-
-        # Check push url
-        try:
-            pushurl = origin.pushurl
-        except AttributeError:
-            pushurl = ''
-
-        if pushurl != self.push:
-            self.git_repo.git.remote('set-url', 'origin', '--push', self.push)
-
-        # Update
         self.update_remote_branch(validate)
 
     def configure_branch(self):
@@ -542,16 +499,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         if self.is_repo_link:
             return self.linked_subproject.configure_branch()
 
-        # create branch if it does not exist
-        if self.branch not in self.git_repo.heads:
-            self.git_repo.git.branch(
-                '--track',
-                self.branch,
-                'origin/%s' % self.branch
-            )
-
-        # switch to correct branch
-        self.git_repo.git.checkout(self.branch)
+        self.repository.configure_branch(self.branch)
 
     def do_update(self, request=None):
         '''
@@ -623,17 +571,9 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                 'pushing to remote repo %s',
                 self.__unicode__()
             )
-            if not self.repo.startswith('hg::'):
-                self.git_repo.git.push(
-                    'origin',
-                    '%s:%s' % (self.branch, self.branch)
-                )
-            else:
-                self.git_repo.git.push(
-                    'origin'
-                )
+            self.repository.push(self.branch)
             return True
-        except Exception as error:
+        except RepositoryException as error:
             weblate.logger.warning(
                 'failed push on repo %s',
                 self.__unicode__()
@@ -668,8 +608,8 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                     'reseting to remote repo %s',
                     self.__unicode__()
                 )
-                self.git_repo.git.reset('--hard', 'origin/%s' % self.branch)
-            except Exception as error:
+                self.repository.reset(self.branch)
+            except RepositoryException as error:
                 weblate.logger.warning(
                     'failed reset on repo %s',
                     self.__unicode__()
@@ -732,16 +672,16 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
 
         # Merge/rebase
         if self.project.merge_style == 'rebase':
-            method = self.git_repo.git.rebase
+            method = self.repository.rebase
             error_msg = _('Failed to rebase our branch onto remote branch %s.')
         else:
-            method = self.git_repo.git.merge
+            method = self.repository.merge
             error_msg = _('Failed to merge remote branch into %s.')
 
         with self.git_lock:
             try:
                 # Try to merge it
-                method('origin/%s' % self.branch)
+                method(self.branch)
                 weblate.logger.info(
                     '%s remote into repo %s',
                     self.project.merge_style,
@@ -750,9 +690,9 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                 return True
             except Exception as error:
                 # In case merge has failer recover
-                status = self.git_repo.git.status()
+                status = self.repository.status()
                 error = str(error)
-                method('--abort')
+                method(abort=True)
 
         # Log error
         weblate.logger.warning(
@@ -790,13 +730,21 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         Loads translations from git.
         '''
         translations = []
-        for path in self.get_mask_matches():
+        matches = self.get_mask_matches()
+        for pos, path in enumerate(matches):
             code = self.get_lang_code(path)
             if langs is not None and code not in langs:
                 weblate.logger.info('skipping %s', path)
                 continue
 
-            weblate.logger.info('checking %s', path)
+            weblate.logger.info(
+                'checking %s in %s/%s [%d/%d]',
+                path,
+                self.project.slug,
+                self.slug,
+                pos + 1,
+                len(matches)
+            )
             translation = Translation.objects.check_sync(
                 self, code, path, force, request=request
             )
@@ -854,6 +802,29 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Validates repository link.
         '''
+        try:
+            repo = SubProject.objects.get_linked(self.repo)
+            if repo is not None and repo.is_repo_link:
+                raise ValidationError(
+                    _(
+                        'Invalid link to a Weblate project, '
+                        'can not link to linked repository!'
+                    )
+                )
+            if repo.pk == self.pk:
+                raise ValidationError(
+                    _(
+                        'Invalid link to a Weblate project, '
+                        'can not link to self!'
+                    )
+                )
+        except (SubProject.DoesNotExist, ValueError):
+            raise ValidationError(
+                _(
+                    'Invalid link to a Weblate project, '
+                    'use weblate://project/subproject.'
+                )
+            )
         if self.push != '':
             raise ValidationError(
                 _('Push URL is not used when repository is linked!')
@@ -877,7 +848,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             if code in langs:
                 raise ValidationError(_(
                     'There are more files for single language, please '
-                    'adjust the mask and use subprojects for translating '
+                    'adjust the mask and use resources for translating '
                     'different resources.'
                 ))
             if lang.code in translated_langs:
@@ -1010,8 +981,8 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         # Validate git repo
         try:
             self.sync_git_repo(True)
-        except git.GitCommandError as exc:
-            raise ValidationError(_('Failed to update git: %s') % exc.status)
+        except RepositoryException as exc:
+            raise ValidationError(_('Failed to update git: %s') % exc)
 
         # Push repo is not used with link
         if self.is_repo_link:
@@ -1097,22 +1068,9 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Checks whether there are some not committed changes.
         '''
-        status = self.git_repo.git.status('--porcelain')
-        if status == '':
-            # No changes to commit
-            return False
-        return True
-
-    def git_check_merge(self, revision):
-        '''
-        Checks whether there are any unmerged commits compared to given
-        revision.
-        '''
-        status = self.git_repo.git.log(revision, '--')
-        if status == '':
-            # No changes to merge
-            return False
-        return True
+        if self.is_repo_link:
+            return self.linked_subproject.git_needs_commit()
+        return self.repository.needs_commit()
 
     def git_needs_merge(self):
         '''
@@ -1120,7 +1078,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         if self.is_repo_link:
             return self.linked_subproject.git_needs_merge()
-        return self.git_check_merge('..origin/%s' % self.branch)
+        return self.repository.needs_merge(self.branch)
 
     def git_needs_push(self):
         '''
@@ -1128,7 +1086,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         if self.is_repo_link:
             return self.linked_subproject.git_needs_push()
-        return self.git_check_merge('origin/%s..' % self.branch)
+        return self.repository.needs_push(self.branch)
 
     @property
     def file_format_cls(self):
@@ -1172,7 +1130,8 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
 
         return self._template_store
 
-    def get_last_change(self):
+    @property
+    def last_change(self):
         '''
         Returns date of last change done in Weblate.
         '''

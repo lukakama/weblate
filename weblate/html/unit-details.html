@@ -2,17 +2,23 @@
 {% load translations %}
 {% if unit.location %}
 <tr>
-<th class="labelscolumn">{% trans "Used in" %}</th>
+<th>{% trans "Source string location" %}</th>
+</tr>
+<tr>
 <td>{{ unit.get_location_links }}</td>
 </tr>
 {% endif %}
 {% if unit.comment %}
 <tr>
-<th class="labelscolumn">{% trans "Comments" %}</th>
-<td class="translation_comment">{{ unit.comment }}</td>
+<th>{% trans "Comments" %}</th>
+</tr>
+<tr>
+<td>{{ unit.comment }}</td>
 </tr>
 {% endif %}
 <tr>
-<th class="labelscolumn">{% trans "First seen" %}</th>
-<td class="translation_comment">{{ unit.source_info.timestamp|naturaltime }}</td>
+<th>{% trans "Source string age" %}</th>
+</tr>
+<tr>
+<td>{{ unit.source_info.timestamp|naturaltime }}</td>
 </tr>

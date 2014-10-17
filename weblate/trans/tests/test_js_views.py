@@ -90,29 +90,12 @@ class JSViewsTest(ViewTestCase):
         )
         self.assertEqual(response.status_code, 400)
 
-    def test_get_other(self):
-        unit = self.get_unit()
-        response = self.client.get(
-            reverse('js-other', kwargs={'unit_id': unit.id}),
-        )
-        self.assertContains(response, unit.checksum)
-
     def test_get_unit_changes(self):
         unit = self.get_unit()
         response = self.client.get(
             reverse('js-unit-changes', kwargs={'unit_id': unit.id}),
         )
         self.assertContains(response, 'href="/exports/rss/')
-
-    def test_get_dictionary(self):
-        unit = self.get_unit()
-        response = self.client.get(
-            reverse('js-dictionary', kwargs={'unit_id': unit.id}),
-        )
-        self.assertContains(
-            response,
-            'No related strings found in dictionary.'
-        )
 
     def test_js_config(self):
         response = self.client.get(reverse('js-config'))

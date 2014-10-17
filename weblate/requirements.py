@@ -21,8 +21,10 @@
 # For some reasons, this fails in PyLint sometimes...
 # pylint: disable=E0611,F0401
 from distutils.version import LooseVersion
+from weblate.trans.vcs import GitRepository
 import importlib
 import sys
+import django
 
 
 def get_version_module(module, name, url, optional=False):
@@ -37,23 +39,7 @@ def get_version_module(module, name, url, optional=False):
             return None
         raise Exception(
             'Failed to import %s, please install %s from %s' % (
-                module,
-                name,
-                url,
-            )
-        )
-    return mod
-
-
-def get_translate_module(name, url):
-    '''
-    Returns module object for translate toolkit.
-    '''
-    try:
-        mod = importlib.import_module('translate.__version__')
-    except ImportError:
-        raise Exception(
-            'Failed to import translate-toolkit, please install %s from %s' % (
+                module.replace('.__version__', ''),
                 name,
                 url,
             )
@@ -112,7 +98,7 @@ def get_versions():
         name,
         url,
         mod.get_version(),
-        '1.5',
+        '1.6',
     ))
 
     name = 'python-social-auth'
@@ -127,7 +113,7 @@ def get_versions():
 
     name = 'Translate Toolkit'
     url = 'http://toolkit.translatehouse.org/'
-    mod = get_translate_module(name, url)
+    mod = get_version_module('translate.__version__', name, url)
     result.append((
         name,
         url,
@@ -145,49 +131,23 @@ def get_versions():
         '2.5',
     ))
 
-    name = 'GitPython'
-    url = 'https://github.com/gitpython-developers/GitPython'
-    mod = get_version_module('git', name, url)
     result.append((
-        name,
-        url,
-        mod.__version__,
-        '0.3.2',
+        'Git',
+        'http://git-scm.com/',
+        GitRepository.get_version(),
+        '1.6',
     ))
-
-    name = 'gitdb'
-    url = 'https://github.com/gitpython-developers/gitdb'
-    mod = get_version_module('gitdb', name, url)
-    result.append((
-        name,
-        url,
-        mod.__version__,
-        '0.5.4',
-    ))
-
-    name = 'Git'
-    url = 'http://git-scm.com/'
-    mod = get_version_module('git', name, url)
-    try:
-        result.append((
-            name,
-            url,
-            mod.Git().version().replace('git version ', ''),
-            '1.7.2',
-        ))
-    except TypeError:
-        # Happens with too old GitPython
-        pass
 
     name = 'South'
     url = 'http://south.aeracode.org/'
-    mod = get_version_module('south', name, url)
-    result.append((
-        name,
-        url,
-        mod.__version__,
-        '1.0',
-    ))
+    if django.VERSION < (1, 7, 0):
+        mod = get_version_module('south', name, url)
+        result.append((
+            name,
+            url,
+            mod.__version__,
+            '1.0',
+        ))
 
     name = 'Pillow (PIL)'
     url = 'http://python-imaging.github.io/'
@@ -199,6 +159,16 @@ def get_versions():
         '1.1.6',
     ))
 
+    name = 'dateutil'
+    url = 'http://labix.org/python-dateutil'
+    mod = get_version_module('dateutil', name, url)
+    result.append((
+        name,
+        url,
+        mod.__version__,
+        '1.0'
+    ))
+
     name = 'lxml'
     url = 'http://lxml.de/'
     mod = get_version_module('lxml.etree', name, url)
@@ -207,6 +177,16 @@ def get_versions():
         url,
         mod.__version__,
         '3.1.0',
+    ))
+
+    name = 'django-crispy-forms'
+    url = 'http://django-crispy-forms.readthedocs.org/'
+    mod = get_version_module('crispy_forms', name, url)
+    result.append((
+        name,
+        url,
+        mod.__version__,
+        '1.4.0',
     ))
 
     return result

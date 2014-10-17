@@ -46,7 +46,8 @@ from weblate.accounts.avatar import get_avatar_image, get_fallback_avatar_url
 from weblate.accounts.models import set_lang, remove_user, Profile
 from weblate.trans.models import Change, Project
 from weblate.accounts.forms import (
-    ProfileForm, SubscriptionForm, UserForm, ContactForm
+    ProfileForm, SubscriptionForm, UserForm, ContactForm,
+    SubscriptionSettingsForm
 )
 from weblate import appsettings
 
@@ -113,10 +114,21 @@ def mail_admins_contact(request, subject, message, context, sender):
 
     mail.send(fail_silently=False)
 
-    messages.info(
+    messages.success(
         request,
         _('Message has been sent to administrator.')
     )
+
+
+def deny_demo(request):
+    """
+    Denies editing of demo account on demo server.
+    """
+    messages.warning(
+        request,
+        _('You can not change demo account on the demo server.')
+    )
+    return redirect('profile')
 
 
 @login_required
@@ -124,34 +136,24 @@ def user_profile(request):
 
     profile = request.user.profile
 
-    if request.method == 'POST':
-        # Read params
-        form = ProfileForm(
-            request.POST,
-            instance=profile
-        )
-        subscriptionform = SubscriptionForm(
-            request.POST,
-            instance=profile
-        )
-        userform = UserForm(
-            request.POST,
-            instance=request.user
-        )
-        if appsettings.DEMO_SERVER and request.user.username == 'demo':
-            messages.warning(
-                request,
-                _('You can not change demo profile on the demo server.')
-            )
-            return redirect('profile')
+    form_classes = [
+        ProfileForm,
+        SubscriptionForm,
+        SubscriptionSettingsForm,
+    ]
 
-        if (form.is_valid()
-                and userform.is_valid()
-                and subscriptionform.is_valid()):
+    if request.method == 'POST':
+        # Parse POST params
+        forms = [form(request.POST, instance=profile) for form in form_classes]
+        forms.append(UserForm(request.POST, instance=request.user))
+
+        if appsettings.DEMO_SERVER and request.user.username == 'demo':
+            return deny_demo(request)
+
+        if min([form.is_valid() for form in forms]):
             # Save changes
-            form.save()
-            subscriptionform.save()
-            userform.save()
+            for form in forms:
+                form.save()
 
             # Change language
             set_lang(request.user, request=request, user=request.user)
@@ -164,19 +166,12 @@ def user_profile(request):
             response.set_cookie(settings.LANGUAGE_COOKIE_NAME, lang_code)
             translation.activate(lang_code)
 
-            messages.info(request, _('Your profile has been updated.'))
+            messages.success(request, _('Your profile has been updated.'))
 
             return response
     else:
-        form = ProfileForm(
-            instance=profile
-        )
-        subscriptionform = SubscriptionForm(
-            instance=profile
-        )
-        userform = UserForm(
-            instance=request.user
-        )
+        forms = [form(instance=profile) for form in form_classes]
+        forms.append(UserForm(instance=request.user))
 
     social = request.user.social_auth.all()
     social_names = [assoc.provider for assoc in social]
@@ -195,9 +190,10 @@ def user_profile(request):
         request,
         'accounts/profile.html',
         {
-            'form': form,
-            'userform': userform,
-            'subscriptionform': subscriptionform,
+            'form': forms[0],
+            'subscriptionform': forms[1],
+            'subscriptionsettingsform': forms[2],
+            'userform': forms[3],
             'profile': profile,
             'title': _('User profile'),
             'licenses': license_projects,
@@ -214,12 +210,15 @@ def user_profile(request):
 
 @login_required
 def user_remove(request):
+    if appsettings.DEMO_SERVER and request.user.username == 'demo':
+        return deny_demo(request)
+
     if request.method == 'POST':
         remove_user(request.user)
 
         logout(request)
 
-        messages.info(
+        messages.success(
             request,
             _('Your account has been removed.')
         )
@@ -364,9 +363,6 @@ def weblate_login(request):
     if request.user.is_authenticated():
         return redirect('profile')
 
-    if 'message' in request.GET:
-        messages.info(request, request.GET['message'])
-
     return auth_views.login(
         request,
         template_name='accounts/login.html',
@@ -450,6 +446,8 @@ def password(request):
     '''
     Password change / set form.
     '''
+    if appsettings.DEMO_SERVER and request.user.username == 'demo':
+        return deny_demo(request)
 
     do_change = False
 
@@ -483,7 +481,7 @@ def password(request):
                 form.cleaned_data['password1']
             )
             request.user.save()
-            messages.info(
+            messages.success(
                 request,
                 _('Your password has been changed.')
             )

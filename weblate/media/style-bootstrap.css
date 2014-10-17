@@ -1,0 +1,193 @@
+.avatar{
+    width: 1em;
+    height: 1em;
+}
+.navbar {
+    margin-bottom: 0;
+}
+h1 {
+    font-size: 24px;
+    margin-top: 0;
+}
+.content {
+    margin: 14px;
+}
+.progress-cell {
+    width: 200px;
+}
+.progress {
+    margin-bottom: 0;
+}
+.nav-pills {
+    margin-bottom: 20px;
+}
+footer ul {
+    padding:0;
+    margin:1em;
+    max-width:none;
+    clear:both;
+}
+footer li{
+    font-size:smaller;
+    list-style:none;
+    float:left;
+    padding:1em;
+    color:gray;
+    border:none;
+}
+.dir-rtl footer > li {
+    float: right;
+}
+footer a {
+    color:#333;
+}
+.legend .progress {
+    width: 20px;
+    display: inline-block;
+    vertical-align: bottom;
+}
+.tooltip-inner {
+    max-width: 600px;
+}
+.helptext {
+    font-size: smaller;
+    display: block;
+    margin-top: 5px;
+    margin-bottom: 10px;
+    color: #737373;
+}
+.progress-checks {
+  background-image: -webkit-linear-gradient(45deg, rgba(255, 255, 255, .15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, .15) 50%, rgba(255, 255, 255, .15) 75%, transparent 75%, transparent);
+  background-image:         linear-gradient(45deg, rgba(255, 255, 255, .15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, .15) 50%, rgba(255, 255, 255, .15) 75%, transparent 75%, transparent);
+  background-size: 40px 40px;
+}
+.translatetext {
+    background-color: #eee;
+}
+
+#preferences ul, #subscriptions ul {
+    list-style: none;
+    padding: 0;
+}
+
+.paginatoraddon {
+    display: inline-block;
+    margin: 20px 0;
+    padding-left: 0px;
+    vertical-align: top;
+}
+.paginatoraddon label:after {
+    content: ":";
+}
+.paginatoraddon .form-group {
+    margin-bottom: 0px;
+}
+.paginatoraddon .form-control {
+    display: inline-block;
+    width: auto;
+}
+.inlineform {
+    display: inline-block;
+}
+.expander {
+    cursor: pointer;
+}
+textarea.translation-editor {
+    height: 3em;
+}
+textarea#id_comment {
+    height: 5em;
+}
+.check {
+    padding: 5px 25px 5px 5px;
+    margin-bottom: 10px;
+}
+.check .close {
+    top: -5px;
+}
+.hlmatch {
+    background-color: #eb3;
+}
+.hlspace {
+    border-bottom: 1px dotted red;
+    color: gray;
+    white-space: pre;
+    display: inline-block;
+}
+.space-tab {
+    width: 4em;
+    text-align: center;
+}
+ins {
+    background-color: lightgreen;
+}
+del {
+    background-color: #fc7979;
+}
+.editor-toolbar {
+    margin: 3px 0;
+}
+.panel-body .table-condensed {
+    margin-bottom: 0;
+}
+td .list-group {
+    margin-bottom: 0;
+}
+
+.glyphicon-spin {
+    -moz-animation: glyphicon-spin 1s infinite linear;
+    -o-animation: glyphicon-spin 1s infinite linear;
+    -webkit-animation: glyphicon-spin 1s infinite linear;
+    animation: glyphicon-spin 1s infinite linear;
+}
+
+@-moz-keyframes glyphicon-spin {
+    0% { -moz-transform: rotate(0deg); }
+  100% { -moz-transform: rotate(359deg); }
+}
+
+@-webkit-keyframes glyphicon-spin {
+    0% { -webkit-transform: rotate(0deg); }
+  100% { -webkit-transform: rotate(359deg); }
+}
+
+@-o-keyframes glyphicon-spin {
+    0% { -o-transform: rotate(0deg); }
+  100% { -o-transform: rotate(359deg); }
+}
+
+@-ms-keyframes glyphicon-spin {
+    0% { -ms-transform: rotate(0deg); }
+  100% { -ms-transform: rotate(359deg); }
+}
+
+@keyframes glyphicon-spin {
+    0% { transform: rotate(0deg); }
+  100% { transform: rotate(359deg); }
+}
+.code-example {
+    font-family: monospace;
+    white-space: pre;
+    height: auto;
+}
+.sort-cell {
+    cursor: pointer;
+}
+.sort-button {
+    display: inline-block;
+    font-size: smaller;
+    margin: 3px;
+}
+.sort-none {
+    color: #ccc;
+}
+.asteriskField {
+    display: none;
+}
+.subscription-checkboxes label {
+    margin-left: 20px;
+    font-weight: normal;
+}
+.subscription-checkboxes input {
+    margin-left: 0;
+}

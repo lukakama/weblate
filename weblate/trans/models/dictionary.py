@@ -19,11 +19,13 @@
 #
 
 from django.db import models
+from django.db.models import Q
 from weblate.lang.models import Language
-from weblate.trans.formats import AutoFormat
+from weblate.trans.formats import AutoFormat, StringIOMode
 from weblate.trans.models.project import Project
 from translate.storage.csvl10n import csvfile
 from django.core.urlresolvers import reverse
+from whoosh.analysis import StandardAnalyzer, StemmingAnalyzer
 
 
 class DictionaryManager(models.Manager):
@@ -31,8 +33,10 @@ class DictionaryManager(models.Manager):
         '''
         Handles dictionary update.
         '''
+        filecopy = fileobj.read()
+        fileobj.close()
         # Load file using translate-toolkit
-        store = AutoFormat.load(fileobj)
+        store = AutoFormat.load(StringIOMode(fileobj.name, filecopy))
 
         ret, skipped = self.import_store(
             request, project, language, store, method
@@ -40,8 +44,10 @@ class DictionaryManager(models.Manager):
 
         if ret == 0 and skipped > 0 and isinstance(store, csvfile):
             # Retry with different CSV scheme
-            fileobj.seek(0)
-            store = csvfile(fileobj, ('source', 'target'))
+            store = csvfile(
+                StringIOMode(fileobj.name, filecopy),
+                ('source', 'target')
+            )
             ret, skipped = self.import_store(
                 request, project, language, store, method
             )
@@ -114,6 +120,43 @@ class DictionaryManager(models.Manager):
             target=created.target,
         )
         return created
+
+    def get_words(self, unit):
+        """
+        Returns list of word pairs for an unit.
+        """
+        words = set()
+
+        # Prepare analyzers
+        # - standard analyzer simply splits words
+        # - stemming extracts stems, to catch things like plurals
+        analyzers = (StandardAnalyzer(), StemmingAnalyzer())
+
+        # Extract words from all plurals and from context
+        for text in unit.get_source_plurals() + [unit.context]:
+            for analyzer in analyzers:
+                words = words.union([token.text for token in analyzer(text)])
+
+        # Grab all words in the dictionary
+        dictionary = self.filter(
+            project=unit.translation.subproject.project,
+            language=unit.translation.language
+        )
+
+        if len(words) == 0:
+            # No extracted words, no dictionary
+            dictionary = dictionary.none()
+        else:
+            # Build the query for fetching the words
+            # Can not use __in as we want case insensitive lookup
+            query = Q()
+            for word in words:
+                query |= Q(source__iexact=word)
+
+            # Filter dictionary
+            dictionary = dictionary.filter(query)
+
+        return dictionary
 
 
 class Dictionary(models.Model):

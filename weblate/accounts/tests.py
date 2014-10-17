@@ -46,7 +46,7 @@ from weblate.accounts.captcha import (
 )
 from weblate.accounts.middleware import RequireLoginMiddleware
 
-from weblate.trans.tests.test_views import ViewTestCase
+from weblate.trans.tests.test_views import ViewTestCase, RegistrationTestMixin
 from weblate.trans.tests.test_util import get_test_file
 from weblate.trans.models.unitdata import Suggestion, Comment
 from weblate.lang.models import Language
@@ -61,23 +61,12 @@ REGISTRATION_DATA = {
 }
 
 
-class RegistrationTest(TestCase):
-    def assertRegistration(self):
-        # Check registration mail
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(
-            mail.outbox[0].subject,
-            '[Weblate] Your registration on Weblate'
-        )
-
-        # Get confirmation URL from mail
-        line = ''
-        for line in mail.outbox[0].body.splitlines():
-            if line.startswith('http://example.com'):
-                break
+class RegistrationTest(TestCase, RegistrationTestMixin):
+    def assert_registration(self):
+        url = self.assert_registration_mailbox()
 
         # Confirm account
-        response = self.client.get(line[18:], follow=True)
+        response = self.client.get(url, follow=True)
         self.assertRedirects(
             response,
             reverse('password')
@@ -108,7 +97,7 @@ class RegistrationTest(TestCase):
         self.assertRedirects(response, reverse('email-sent'))
 
         # Confirm account
-        self.assertRegistration()
+        self.assert_registration()
 
         # Set password
         response = self.client.post(
@@ -122,7 +111,7 @@ class RegistrationTest(TestCase):
 
         # Check we can access home (was redirected to password change)
         response = self.client.get(reverse('home'))
-        self.assertContains(response, 'Logged in as')
+        self.assertContains(response, 'First Last')
 
         user = User.objects.get(username='username')
         # Verify user is active
@@ -147,7 +136,7 @@ class RegistrationTest(TestCase):
         )
         self.assertRedirects(response, reverse('email-sent'))
 
-        self.assertRegistration()
+        self.assert_registration()
 
     def test_wrong_username(self):
         data = REGISTRATION_DATA.copy()
@@ -158,7 +147,7 @@ class RegistrationTest(TestCase):
         )
         self.assertContains(
             response,
-            'Ensure this value has at least 5 characters (it has 1).'
+            'Ensure this value has at least 4 characters (it has 1).'
         )
 
     def test_wrong_mail(self):
@@ -251,7 +240,7 @@ class ViewTest(TestCase):
         '''
         # Basic get
         response = self.client.get(reverse('contact'))
-        self.assertContains(response, 'class="contact-table"')
+        self.assertContains(response, 'id="id_message"')
 
         # Sending message
         response = self.client.post(
@@ -284,7 +273,7 @@ class ViewTest(TestCase):
         # Enabled
         appsettings.OFFER_HOSTING = True
         response = self.client.get(reverse('hosting'))
-        self.assertContains(response, 'class="contact-table"')
+        self.assertContains(response, 'id="id_message"')
 
         # Sending message
         response = self.client.post(
@@ -378,7 +367,7 @@ class ProfileTest(ViewTestCase):
     def test_profile(self):
         # Get profile page
         response = self.client.get(reverse('profile'))
-        self.assertContains(response, 'class="tabs preferences"')
+        self.assertContains(response, 'action="/accounts/profile/"')
 
         # Save profile
         response = self.client.post(

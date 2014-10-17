@@ -31,6 +31,32 @@ from weblate.trans.models.source import PRIORITY_CHOICES
 from urllib import urlencode
 import weblate
 
+ICON_TEMPLATE = u'''
+<span class="glyphicon glyphicon-{0}"></span> {1}
+'''
+BUTTON_TEMPLATE = u'''
+<button class="btn btn-default {0}" title="{1}" {2}>{3}</button>
+'''
+RADIO_TEMPLATE = u'''
+<label class="btn btn-default {0}" title="{1}">
+<input type="radio" name="{2}" value="{3}" {4}/>
+{5}
+</label>
+'''
+GROUP_TEMPLATE = u'''
+<div class="btn-group btn-group-xs" {0}>{1}</div>
+'''
+TOOLBAR_TEMPLATE = u'''
+<div class="btn-toolbar pull-right editor-toolbar">{0}</div>
+'''
+
+SPECIAL_CHARS = (u'→', u'↵', u'…')
+CHAR_NAMES = {
+    u'→': _('Insert tab character'),
+    u'↵': _('Insert new line'),
+    u'…': _('Insert horizontal ellipsis'),
+}
+
 
 def escape_newline(value):
     '''
@@ -45,38 +71,95 @@ class PluralTextarea(forms.Textarea):
     '''
     Text area extension which possibly handles plurals.
     '''
+    def get_toolbar(self, language, fieldname):
+        """
+        Returns toolbar HTML code.
+        """
+        groups = []
+        # Copy button
+        groups.append(
+            GROUP_TEMPLATE.format(
+                '',
+                BUTTON_TEMPLATE.format(
+                    'copy-text',
+                    ugettext('Fill in with source string'),
+                    u'data-loading-text="{0}"'.format(ugettext(u'Loading…')),
+                    ICON_TEMPLATE.format('transfer', ugettext('Copy'))
+                )
+            )
+        )
+
+        # Special chars
+        chars = []
+        for char in SPECIAL_CHARS:
+            if char in CHAR_NAMES:
+                name = CHAR_NAMES[char]
+            else:
+                name = ugettext('Insert character {0}').format(char)
+            chars.append(
+                BUTTON_TEMPLATE.format(
+                    'specialchar',
+                    name,
+                    '',
+                    char
+                )
+            )
+        groups.append(
+            GROUP_TEMPLATE.format('', u'\n'.join(chars))
+        )
+
+        # RTL/LTR switch
+        if language.direction == 'rtl':
+            rtl_name = 'rtl-{0}'.format(fieldname)
+            rtl_switch = [
+                RADIO_TEMPLATE.format(
+                    'direction-toggle active',
+                    ugettext('Toggle text direction'),
+                    rtl_name,
+                    'rtl',
+                    'checked="checked"',
+                    'RTL',
+                ),
+                RADIO_TEMPLATE.format(
+                    'direction-toggle',
+                    ugettext('Toggle text direction'),
+                    rtl_name,
+                    'ltr',
+                    '',
+                    'LTR'
+                ),
+            ]
+            groups.append(
+                GROUP_TEMPLATE.format(
+                    'data-toggle="buttons"',
+                    u'\n'.join(rtl_switch)
+                )
+            )
+
+        return TOOLBAR_TEMPLATE.format(u'\n'.join(groups))
+
     def render(self, name, value, attrs=None):
         '''
         Renders all textareas with correct plural labels.
         '''
-        lang, value = value
+        lang, value, checksum = value
         tabindex = self.attrs['tabindex']
 
         # Need to add extra class
-        attrs['class'] = 'translation-editor'
+        attrs['class'] = 'translation-editor form-control'
         attrs['tabindex'] = tabindex
         attrs['lang'] = lang.code
         attrs['dir'] = lang.direction
 
-        # Handle single item translation
-        if len(value) == 1:
-            return super(PluralTextarea, self).render(
-                name,
-                escape_newline(value[0]),
-                attrs
-            )
-
         # Okay we have more strings
         ret = []
-        orig_id = attrs['id']
+        base_id = 'id_{0}'.format(checksum)
         for idx, val in enumerate(value):
             # Generate ID
-            if idx > 0:
-                fieldname = '%s_%d' % (name, idx)
-                attrs['id'] = '%s_%d' % (orig_id, idx)
-                attrs['tabindex'] = tabindex + idx
-            else:
-                fieldname = name
+            fieldname = '{0}_{1}'.format(name, idx)
+            fieldid = '{0}_{1}'.format(base_id, idx)
+            attrs['id'] = fieldid
+            attrs['tabindex'] = tabindex + idx
 
             # Render textare
             textarea = super(PluralTextarea, self).render(
@@ -85,43 +168,46 @@ class PluralTextarea(forms.Textarea):
                 attrs
             )
             # Label for plural
-            label = lang.get_plural_label(idx)
+            if len(value) == 1:
+                label = ugettext('Translation')
+            else:
+                label = lang.get_plural_label(idx)
             ret.append(
-                '<label class="plurallabel" for="%s">%s</label><br />%s' % (
-                    attrs['id'],
+                u'{0}<label for="{1}">{2}</label>{3}'.format(
+                    self.get_toolbar(lang, fieldid),
+                    fieldid,
                     label,
                     textarea
                 )
             )
 
         # Show plural equation for more strings
-        pluralinfo = '<abbr title="%s">%s</abbr>: %s' % (
-            ugettext(
-                'This equation identifies which plural form '
-                'will be used based on given count (n).'
-            ),
-            ugettext('Plural equation'),
-            lang.pluralequation
-        )
-        pluralmsg = '<br /><span class="pluralequation">%s</span>' % pluralinfo
+        pluralmsg = ''
+        if len(value) > 1:
+            pluralinfo = u'<abbr title="{0}">{1}</abbr>: {2}'.format(
+                ugettext(
+                    'This equation identifies which plural form '
+                    'will be used based on given count (n).'
+                ),
+                ugettext('Plural equation'),
+                lang.pluralequation
+            )
+            pluralmsg = u'<p class="help-block">{0}</p>'.format(pluralinfo)
 
         # Join output
-        return mark_safe('<br />'.join(ret) + pluralmsg)
+        return mark_safe(''.join(ret) + pluralmsg)
 
     def value_from_datadict(self, data, files, name):
         '''
-        Returns processed plurals - either list of plural strings or single
-        string if no plurals are in use.
+        Returns processed plurals as a list.
         '''
-        ret = [data.get(name, None)]
-        for idx in range(1, 10):
+        ret = []
+        for idx in range(0, 10):
             fieldname = '%s_%d' % (name, idx)
             if fieldname not in data:
                 break
-            ret.append(data.get(fieldname, None))
+            ret.append(data.get(fieldname, ''))
         ret = [smart_unicode(r.replace('\r', '')) for r in ret]
-        if len(ret) == 0:
-            return ret[0]
         return ret
 
 
@@ -132,6 +218,7 @@ class PluralField(forms.CharField):
     string.
     '''
     def __init__(self, max_length=None, min_length=None, *args, **kwargs):
+        kwargs['label'] = ''
         super(PluralField, self).__init__(
             *args,
             widget=PluralTextarea,
@@ -182,7 +269,9 @@ class TranslationForm(ChecksumForm):
     '''
     Form used for translation of single string.
     '''
-    target = PluralField(required=False)
+    target = PluralField(
+        required=False,
+    )
     fuzzy = forms.BooleanField(
         label=pgettext_lazy('Checkbox for marking translation fuzzy', 'Fuzzy'),
         required=False
@@ -194,7 +283,9 @@ class TranslationForm(ChecksumForm):
             kwargs['initial'] = {
                 'checksum': unit.checksum,
                 'target': (
-                    unit.translation.language, unit.get_target_plurals()
+                    unit.translation.language,
+                    unit.get_target_plurals(),
+                    unit.checksum
                 ),
                 'fuzzy': unit.fuzzy,
             }
@@ -417,7 +508,11 @@ class DictUploadForm(forms.Form):
     Uploading file to a dictionary.
     '''
     file = forms.FileField(
-        label=_('File')
+        label=_('File'),
+        help_text=_(
+            'You can upload any format which is understood by '
+            'Translate Toolkit (including TBX, CSV or Gettext PO files).'
+        )
     )
     method = forms.ChoiceField(
         label=_('Merge method'),
@@ -436,7 +531,10 @@ class ReviewForm(forms.Form):
     '''
     date = forms.DateField(
         label=_('Starting date'),
-        widget=forms.DateInput(format='%Y-%m-%d')
+        widget=forms.DateInput(
+            attrs={'type': 'date'},
+            format='%Y-%m-%d'
+        )
     )
     type = forms.CharField(widget=forms.HiddenInput, initial='review')
 
@@ -463,7 +561,28 @@ class CommentForm(forms.Form):
     '''
     Simple commenting form.
     '''
-    comment = forms.CharField(widget=forms.Textarea(attrs={'dir': 'auto'}))
+    comment = forms.CharField(
+        widget=forms.Textarea(attrs={'dir': 'auto'}),
+        label=_('New comment'),
+    )
+    scope = forms.ChoiceField(
+        label=_('Scope'),
+        help_text=_(
+            'Is your comment specific to this '
+            'translation or generic for all of them?'
+        ),
+        choices=(
+            (
+                'global',
+                _('Source string comment, suggestions to change this string')
+            ),
+            (
+                'translation',
+                _('Translation comment, discussions with other translators')
+            ),
+        ),
+        initial='global',
+    )
 
 
 class EnageLanguageForm(forms.Form):

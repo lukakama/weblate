@@ -29,6 +29,7 @@ class PluralsCheck(TargetCheck):
     check_id = 'plurals'
     name = _('Missing plurals')
     description = _('Some plural forms are not translated')
+    severity = 'danger'
 
     def check_target_unit(self, sources, targets, unit):
         # Is this plural?
@@ -57,15 +58,14 @@ class ConsistencyCheck(TargetCheck):
         'This message has more than one translation in this project'
     )
     ignore_untranslated = False
+    severity = 'warning'
 
     def check_target_unit(self, sources, targets, unit):
         from weblate.trans.models import Unit
         # Do not check consistency if user asked not to have it
         if not unit.translation.subproject.allow_translation_propagation:
             return False
-        related = Unit.objects.same(unit).exclude(
-            id=unit.id,
-        )
+        related = Unit.objects.same(unit)
         if not related.exists():
             return False
 

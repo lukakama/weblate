@@ -40,7 +40,7 @@ from weblate.trans.util import (
 )
 import weblate
 
-FLAG_TEMPLATE = '<span title="%s" class="flag-icon ui-icon ui-icon-%s"></span>'
+FLAG_TEMPLATE = u'<span title="{0}" class="glyphicon glyphicon-{1}"></span>'
 
 
 class UnitManager(models.Manager):
@@ -297,6 +297,8 @@ class UnitManager(models.Manager):
             checksum=unit.checksum,
             translation__subproject__project=project,
             translation__language=unit.translation.language
+        ).exclude(
+            pk=unit.id
         )
 
 
@@ -339,6 +341,7 @@ class Unit(models.Model):
         super(Unit, self).__init__(*args, **kwargs)
         self._all_flags = None
         self._source_info = None
+        self._suggestions = None
         self.old_translated = self.translated
         self.old_fuzzy = self.fuzzy
 
@@ -496,7 +499,7 @@ class Unit(models.Model):
         """
         Propagates current translation to all others.
         """
-        allunits = Unit.objects.same(self).exclude(id=self.id).filter(
+        allunits = Unit.objects.same(self).filter(
             translation__subproject__allow_translation_propagation=True
         )
         for unit in allunits:
@@ -709,11 +712,13 @@ class Unit(models.Model):
         """
         Returns all suggestions for this unit.
         """
-        return Suggestion.objects.filter(
-            contentsum=self.contentsum,
-            project=self.translation.subproject.project,
-            language=self.translation.language
-        )
+        if self._suggestions is None:
+            self._suggestions = Suggestion.objects.filter(
+                contentsum=self.contentsum,
+                project=self.translation.subproject.project,
+                language=self.translation.language
+            )
+        return self._suggestions
 
     def cleanup_checks(self, source, target):
         """
@@ -782,7 +787,8 @@ class Unit(models.Model):
         return Comment.objects.filter(
             contentsum=self.contentsum,
             project=self.translation.subproject.project,
-            language=self.translation.language,
+        ).filter(
+            Q(language=self.translation.language) | Q(language=None),
         )
 
     def get_source_comments(self):
@@ -925,7 +931,7 @@ class Unit(models.Model):
         self.translation.invalidate_cache()
 
         if recurse:
-            for unit in Unit.objects.same(self).exclude(id=self.id):
+            for unit in Unit.objects.same(self):
                 unit.update_has_failing_check(False)
 
     def update_has_suggestion(self):
@@ -1009,32 +1015,32 @@ class Unit(models.Model):
         if self.fuzzy:
             flags.append((
                 _('Message is fuzzy'),
-                'help'
+                'question-sign text-danger'
             ))
         elif not self.translated:
             flags.append((
                 _('Message is not translated'),
-                'document-b'
+                'remove-sign text-danger'
             ))
         elif self.has_failing_check:
             flags.append((
                 _('Message has failing checks'),
-                'notice'
+                'exclamation-sign text-warning'
             ))
         elif self.translated:
             flags.append((
                 _('Message is translated'),
-                'check'
+                'ok-sign text-success'
             ))
 
         if self.has_comment:
             flags.append((
                 _('Message has comments'),
-                'comment'
+                'comment text-info'
             ))
 
         return mark_safe(
-            '\n'.join([FLAG_TEMPLATE % flag for flag in flags])
+            '\n'.join([FLAG_TEMPLATE.format(*flag) for flag in flags])
         )
 
     @property

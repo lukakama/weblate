@@ -1,5 +1,5 @@
 Name:           weblate
-Version: 1.10
+Version: 2.0
 Release:        1
 License:        GPL-3.0+
 Summary:        Web-based translation tool
@@ -15,10 +15,10 @@ Requires:       cron
 Requires:       python-django >= 1.5
 Requires:       python-python-social-auth >= 0.1.17
 Requires:       translate-toolkit >= 1.10.0
-Requires:       python-GitPython >= 0.3.2
 Requires:       python-whoosh >= 2.5.2
 Requires:       python-Pillow
 Requires:       python-South >= 1.0
+Requires:       python-django-crispy-forms
 %py_requires
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
@@ -32,7 +32,7 @@ Vendor:         Michal Čihař <mcihar@suse.com>
 %description
 Weblate is a free web-based translation tool with tight Git integration. It
 features simple and clean user interface, propagation of translations across
-subprojects, quality checks and automatic linking to source files.
+resources, quality checks and automatic linking to source files.
 
 List of features includes:
 
@@ -54,7 +54,7 @@ List of features includes:
 %build
 make -C docs html
 cp weblate/settings_example.py weblate/settings.py
-sed -i 's@^WEB_ROOT = .*@WEB_ROOT = "%{WLDIR}/weblate"@g' weblate/settings.py
+sed -i 's@^BASE_DIR = .*@BASE_DIR = "%{WLDIR}/weblate"@g' weblate/settings.py
 sed -i 's@^WHOOSH_INDEX = .*@WHOOSH_INDEX = "%{WLDATADIR}/whoosh-index"@g' weblate/settings.py
 sed -i 's@^GIT_ROOT = .*@GIT_ROOT = "%{WLDATADIR}/repos"@g' weblate/settings.py
 sed -i "s@'ENGINE': 'django.db.backends.sqlite3'@'ENGINE': 'django.db.backends.mysql'@" weblate/settings.py

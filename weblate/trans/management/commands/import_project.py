@@ -24,10 +24,10 @@ from django.utils.text import slugify
 from weblate.trans.models import SubProject, Project
 from weblate.trans.formats import FILE_FORMATS
 from weblate.trans.util import is_repo_link
+from weblate.trans.vcs import GitRepository
 from glob import glob
 from optparse import make_option
 import tempfile
-import git
 import os
 import re
 import shutil
@@ -39,7 +39,7 @@ class Command(BaseCommand):
     """
     Command for mass importing of repositories into Weblate.
     """
-    help = 'imports projects with more subprojects'
+    help = 'imports projects with more resources'
     args = '<project> <gitrepo> <branch> <filemask>'
     option_list = BaseCommand.option_list + (
         make_option(
@@ -109,16 +109,10 @@ class Command(BaseCommand):
         os.chmod(workdir, 0755)
 
         # Initialize git repository
-        self.logger.info('Initializing git repository...')
-        gitrepo = git.Repo.init(workdir)
-        gitrepo.git.remote('add', 'origin', repo)
-
-        self.logger.info('Fetching remote git repository...')
-        gitrepo.git.remote('update', 'origin')
-        gitrepo.git.branch('--track', branch, 'origin/%s' % branch)
-
+        self.logger.info('Cloning git repository...')
+        gitrepo = GitRepository.clone(repo, workdir)
         self.logger.info('Updating working copy in git repository...')
-        gitrepo.git.checkout(branch)
+        gitrepo.configure_branch(branch)
 
         return workdir
 
@@ -211,12 +205,12 @@ class Command(BaseCommand):
             )
             if subprojects.exists():
                 self.logger.warn(
-                    'Subproject %s already exists, skipping',
+                    'Resource %s already exists, skipping',
                     name
                 )
                 continue
 
-            self.logger.info('Creating subproject %s', name)
+            self.logger.info('Creating resource %s', name)
             SubProject.objects.create(
                 name=name,
                 slug=slug,
@@ -244,14 +238,14 @@ class Command(BaseCommand):
 
         if SubProject.objects.filter(project=project, slug=slug).exists():
             self.logger.warn(
-                'Subproject %s already exists, skipping and using it '
-                'as main subproject',
+                'Resource %s already exists, skipping and using it '
+                'as main resource',
                 name
             )
             shutil.rmtree(workdir)
             return matches, 'weblate://%s/%s' % (project.slug, slug)
 
-        self.logger.info('Creating subproject %s as main subproject', name)
+        self.logger.info('Creating resource %s as main resource', name)
 
         # Rename gitrepository to new name
         os.rename(

@@ -1,29 +1,66 @@
 {% extends "base.html" %}
 {% load i18n %}
+{% load translations %}
 {% load url from future %}
 
 {% block breadcrumbs %}
 <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+
+<a class="pull-right" href="{{ object.get_widgets_url }}">
+<img src="{% url 'widget-image' project=object.slug widget='shields' color='badge' extension='svg' %}" />
+</a>
 {% endblock %}
 
 {% block content %}
+<ul class="nav nav-pills">
+  <li class="active"><a href="#overview" data-toggle="tab">{% trans "Overview" %}</a></li>
+  <li><a href="#history" data-toggle="tab">{% trans "History" %}</a></li>
+  <li><a href="#activity" data-toggle="tab" data-href="{% url 'view_activity_project' project=object.slug %}">{% trans "Activity" %}</a></li>
+  <li class="dropdown">
+    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+      {% trans "Tools" %} <span class="caret"></span>
+    </a>
+    <ul class="dropdown-menu">
+      <li><a href="{% url 'data_project' project=object.slug  %}">{% trans "Data exports" %}</a></li>
+      {% if perms.trans.commit_translation or perms.trans.update_translation %}
+      <li><a href="#git" data-toggle="tab" data-href="{% url 'git_status_project' project=object.slug %}">{% trans "Git maintenance" %}</a></li>
+      {% endif %}
+      <li><a href="{% url 'checks' %}?project={{ object.slug }}">{% trans "Failing checks" %}</a></li>
+      <li><a href="{% url 'checks' %}?project={{ object.slug }}&amp;ignored=true">{% trans "Ignored checks" %}</a></li>
+    </ul>
+  </li>
+{% if enable_sharing %}
+  <li class="dropdown">
+    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+      {% trans "Share" %} <span class="caret"></span>
+    </a>
+    <ul class="dropdown-menu">
+{% with object.get_share_url as share_url and object.get_widgets_url as widgets_url %}
+      <li><a href="http://www.facebook.com/sharer.php?u={{ share_url }}">{% trans "Share on Facebook!" %}</a></li>
+      <li><a href="https://twitter.com/share?text={% blocktrans %}Translate {{ object }} using %23Weblate at {{ share_url }}!{% endblocktrans %}">{% trans "Tweet this translation!" %}</a></li>
+      <li><a href="{{ widgets_url }}">{% trans "Status widgets" %}</a></li>
+{% endwith %}
+    </ul>
+  </li>
+{% endif %}
+</ul>
 
-<h2>{% trans "Project Information" %}</h2>
+<div class="tab-content">
+<div class="tab-pane active" id="overview">
 
-<a class="menu-float" href="{{ object.get_widgets_url }}">
-<img src="{% url 'widget-image' project=object.slug widget='shields' color='badge' extension='svg' %}" />
-</a>
+<div class="row">
 
-<table class="info">
-{% include "project_info.html" %}
-</table>
+<div class="col-md-6">
 
-<h2>{% trans "Subprojects" %}</h2>
 
-<table class="sort">
+<div class="panel panel-primary">
+  <div class="panel-heading"><h4 class="panel-title">{% trans "Resources" %}</h4></div>
+  <div class="panel-body">
+
+<table class="sort table">
 <thead>
 <tr>
-<th>{% trans "Subproject" %}</th>
+<th>{% trans "Resource" %}</th>
 <th colspan="2">{% trans "Translated" %}</th>
 </tr>
 <tbody>
@@ -31,7 +68,7 @@
 {% with prj.get_translated_percent as percent and prj.get_fuzzy_percent as fuzzy and prj.get_failing_checks_percent as check_percent %}
 <tr>
 <th><a href="{{ prj.get_absolute_url }}">{{ prj.name }}</a></th>
-<td><div class="progress" data-value="{{ percent|floatformat:0 }}" data-fuzzy="{{ fuzzy|floatformat:0 }}" data-checks="{{ check_percent|floatformat:0 }}"></div></td>
+<td class="progress-cell">{% translation_progress prj %}</td>
 <td class="percent">{{ percent }}%</td>
 </tr>
 {% endwith %}
@@ -40,42 +77,75 @@
 </table>
 
 {% include "legend.html" %}
-
-<h2>{% trans "Tools" %}</h2>
-
-<div class="tabs" id="project-tabs">
-<ul>
-<li><a href="#changes">{% trans "History" %}</a></li>
-<li><a href="#dicts">{% trans "Glossaries" %}</a></li>
-{% if perms.trans.commit_translation or perms.trans.update_translation %}
-<li><a href="{% url 'git_status_project' project=object.slug %}">{% trans "Git maintenance" %}</a></li>
-{% endif %}
-{% if enable_sharing %}
-<li><a href="#share">{% trans "Share" %}</a></li>
-{% endif %}
-<li><a href="{% url 'view_activity_project' project=object.slug %}">{% trans "Activity" %}</a></li>
-</ul>
-
-<div id="dicts">
-<ul>
-{% for dict in dicts %}
-<li><a href="{% url 'show_dictionary' project=object.slug lang=dict.code %}">{{ dict }}</a></li>
-{% endfor %}
-<li><a href="{% url 'show_dictionaries' project=object.slug %}">{% trans "Manage all glossaries" %}</a></li>
-</ul>
+</div>
 </div>
 
-<div id="changes">
+
+</div>
+
+<div class="col-md-6">
+
+<div class="panel panel-primary">
+  <div class="panel-heading"><h4 class="panel-title">{% trans "Project Information" %}</h4></div>
+  <div class="panel-body">
+
+<table class="table">
+{% include "project_info.html" %}
+</table>
+</div>
+</div>
+
+<div class="panel panel-primary">
+  <div class="panel-heading"><h4 class="panel-title">{% trans "Glossaries" %}</h4></div>
+  <div class="panel-body">
+{% if dicts %}
+<div class="list-group">
+{% for dict in dicts %}
+<a class="list-group-item" href="{% url 'show_dictionary' project=object.slug lang=dict.language.code %}"><span class="badge">{{ dict.count }}</span>{{ dict.language }}</a>
+{% endfor %}
+</div>
+{% else %}
+<p>{% trans "There are currently no glossaries defined for this project." %}</p>
+{% endif %}
+</div>
+<div class="panel-footer">
+<a class="btn btn-default" href="{% url 'show_dictionaries' project=object.slug %}">{% trans "Manage all glossaries" %}</a>
+</div>
+</div>
+
+
+</div>
+</div>
+
+</div>
+
+<div class="tab-pane" id="history">
 {% include "last-changes.html" %}
 </div>
 
-{% if enable_sharing %}
-<div id="share">
-{% with object as project %}
-{% include 'share.html' %}
-{% endwith %}
+<div class="tab-pane" id="activity">
+<div class="panel panel-primary">
+<div class="panel-heading"><h4 class="panel-title">{% trans "Activity" %}</h4></div>
+<div class="panel-body">
+<p>{% trans "Loading…" %}</p>
+</div>
+
+</div>
+</div>
+
+{% if perms.trans.commit_translation or perms.trans.update_translation %}
+<div class="tab-pane" id="git">
+<div class="panel panel-primary">
+<div class="panel-heading"><h4 class="panel-title">{% trans "Git maintenance" %}</h4></div>
+<div class="panel-body">
+<p>{% trans "Loading…" %}</p>
+</div>
+
+</div>
 </div>
 {% endif %}
+
+</div>
 
 </div>
 

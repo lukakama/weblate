@@ -160,7 +160,7 @@ def upload_dictionary(request, project, lang):
                         _('No words to import found in file.')
                     )
                 else:
-                    messages.info(
+                    messages.success(
                         request,
                         _('Imported %d words from file.') % count
                     )
@@ -342,7 +342,7 @@ def show_dictionary(request, project, lang):
             'title': dict_title(prj, lang),
             'project': prj,
             'language': lang,
-            'words': words,
+            'page_obj': words,
             'form': form,
             'uploadform': uploadform,
             'letterform': letterform,

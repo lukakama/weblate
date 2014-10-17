@@ -20,7 +20,8 @@
 
 from django import forms
 from django.utils.translation import ugettext_lazy as _, get_language
-from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth import authenticate
+from crispy_forms.helper import FormHelper
 
 from weblate.accounts.models import Profile, VerifiedEmail
 from weblate.accounts.captcha import MathCaptcha
@@ -83,9 +84,9 @@ class NoStripEmailField(forms.EmailField):
 class UsernameField(forms.RegexField):
     def __init__(self, *args, **kwargs):
         kwargs['max_length'] = 30
-        kwargs['min_length'] = 5
+        kwargs['min_length'] = 4
         kwargs['regex'] = r'^[\w.@+-]+$'
-        kwargs['help_text'] = _('At least five characters long.')
+        kwargs['help_text'] = _('At least four characters long.')
         kwargs['label'] = _('Username')
         kwargs['error_messages'] = {
             'invalid': _(
@@ -100,7 +101,7 @@ class UsernameField(forms.RegexField):
 
     def clean(self, value):
         '''
-        Username validation, requires length of five chars and unique.
+        Username validation, requires unique name.
         '''
         if value is not None:
             existing = User.objects.filter(
@@ -187,13 +188,6 @@ class SubscriptionForm(forms.ModelForm):
         model = Profile
         fields = (
             'subscriptions',
-            'subscribe_any_translation',
-            'subscribe_new_string',
-            'subscribe_new_suggestion',
-            'subscribe_new_contributor',
-            'subscribe_new_comment',
-            'subscribe_new_language',
-            'subscribe_merge_failure',
         )
         widgets = {
             'subscriptions': forms.CheckboxSelectMultiple
@@ -206,6 +200,19 @@ class SubscriptionForm(forms.ModelForm):
         self.fields['subscriptions'].help_text = None
         self.fields['subscriptions'].required = False
         self.fields['subscriptions'].queryset = Project.objects.all_acl(user)
+        self.helper = FormHelper(self)
+        self.helper.field_class = 'subscription-checkboxes'
+        self.helper.field_template = \
+            'bootstrap3/layout/checkboxselectmultiple.html'
+
+
+class SubscriptionSettingsForm(forms.ModelForm):
+    '''
+    User subscription management.
+    '''
+    class Meta(object):
+        model = Profile
+        fields = Profile.SUBSCRIPTION_FIELDS
 
 
 class UserForm(forms.ModelForm):
@@ -258,6 +265,10 @@ class ContactForm(forms.Form):
     message = forms.CharField(
         label=_('Message'),
         required=True,
+        help_text=_(
+            'Please contact us in English, otherwise we might '
+            'be unable to understand your request.'
+        ),
         widget=forms.Textarea
     )
     content = forms.CharField(required=False)
@@ -446,13 +457,59 @@ class ResetForm(EmailForm):
         return users[0]
 
 
-class LoginForm(AuthenticationForm):
-    def __init__(self, *args, **kwargs):
+class LoginForm(forms.Form):
+    username = forms.CharField(
+        max_length=254,
+        label=_('Username or email')
+    )
+    password = forms.CharField(
+        label=_("Password"),
+        widget=forms.PasswordInput
+    )
 
+    error_messages = {
+        'invalid_login': _("Please enter a correct username and password. "
+                           "Note that both fields may be case-sensitive."),
+        'inactive': _("This account is inactive."),
+    }
+
+    def __init__(self, request=None, *args, **kwargs):
+        """
+        The 'request' parameter is set for custom auth use by subclasses.
+        The form data comes in via the standard 'data' kwarg.
+        """
+        self.request = request
+        self.user_cache = None
         super(LoginForm, self).__init__(*args, **kwargs)
 
-        self.fields['username'].label = _('Username or email')
-        self.fields['password'].label = _('Password')
+    def clean(self):
+        username = self.cleaned_data.get('username')
+        password = self.cleaned_data.get('password')
+
+        if username and password:
+            self.user_cache = authenticate(
+                username=username,
+                password=password
+            )
+            if self.user_cache is None:
+                raise forms.ValidationError(
+                    self.error_messages['invalid_login'],
+                    code='invalid_login',
+                )
+            elif not self.user_cache.is_active:
+                raise forms.ValidationError(
+                    self.error_messages['inactive'],
+                    code='inactive',
+                )
+        return self.cleaned_data
+
+    def get_user_id(self):
+        if self.user_cache:
+            return self.user_cache.id
+        return None
+
+    def get_user(self):
+        return self.user_cache
 
 
 class HostingForm(forms.Form):
@@ -466,8 +523,8 @@ class HostingForm(forms.Form):
     repo = forms.CharField(
         label=_('Git repository'),
         help_text=_(
-            'URL of Git repository, use weblate://project/subproject '
-            'for sharing with other subproject.'
+            'URL of Git repository, use weblate://project/resource '
+            'for sharing with other resource.'
         ),
         required=True
     )

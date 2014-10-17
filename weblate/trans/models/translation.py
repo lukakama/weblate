@@ -28,27 +28,28 @@ from django.core.cache import cache
 from django.utils import timezone
 from django.core.urlresolvers import reverse
 import os
-import git
+import subprocess
 import traceback
-import ConfigParser
 from translate.storage import poheader
 from datetime import datetime, timedelta
 
 import weblate
 from weblate import appsettings
 from weblate.lang.models import Language
-from weblate.trans.formats import AutoFormat
+from weblate.trans.formats import AutoFormat, StringIOMode
 from weblate.trans.checks import CHECKS
 from weblate.trans.models.unit import Unit
 from weblate.trans.models.unitdata import Check, Suggestion, Comment
 from weblate.trans.util import (
     get_site_url, sleep_while_git_locked, translation_percent, split_plural,
 )
+from weblate.trans.vcs import RepositoryException
 from weblate.accounts.avatar import get_user_display
 from weblate.trans.mixins import URLMixin, PercentMixin
 from weblate.trans.boolean_sum import BooleanSum
 from weblate.accounts.models import notify_new_string
 from weblate.trans.models.changes import Change
+from weblate.trans.util import get_clean_env
 
 
 class TranslationManager(models.Manager):
@@ -224,6 +225,16 @@ class Translation(models.Model, URLMixin, PercentMixin):
         if self.total_words == 0:
             return 0
         return translation_percent(self.translated_words, self.total_words)
+
+    def get_fuzzy_words_percent(self):
+        if self.total_words == 0:
+            return 0
+        return translation_percent(self.fuzzy_words, self.total_words)
+
+    def get_failing_checks_words_percent(self):
+        if self.total_words == 0:
+            return 0
+        return translation_percent(self.failing_checks_words, self.total_words)
 
     @property
     def untranslated_words(self):
@@ -499,19 +510,19 @@ class Translation(models.Model, URLMixin, PercentMixin):
 
         # Check if we're not already up to date
         if self.revision != self.get_git_blob_hash():
-            weblate.logger.info(
-                'processing %s in %s, revision has changed',
-                self.filename,
-                self.subproject.__unicode__()
-            )
+            reason = 'revision has changed'
         elif force:
-            weblate.logger.info(
-                'processing %s in %s, check forced',
-                self.filename,
-                self.subproject.__unicode__()
-            )
+            reason = 'check forced'
         else:
             return
+
+        weblate.logger.info(
+            'processing %s in %s/%s, %s',
+            self.filename,
+            self.subproject.project.slug,
+            self.subproject.slug,
+            reason,
+        )
 
         # List of created units (used for cleanup and duplicates detection)
         created_units = set()
@@ -599,8 +610,8 @@ class Translation(models.Model, URLMixin, PercentMixin):
             notify_new_string(self)
 
     @property
-    def git_repo(self):
-        return self.subproject.git_repo
+    def repository(self):
+        return self.subproject.repository
 
     def get_last_remote_commit(self):
         return self.subproject.get_last_remote_commit()
@@ -621,24 +632,11 @@ class Translation(models.Model, URLMixin, PercentMixin):
         '''
         Returns current Git blob hash for file.
         '''
-        tree = self.git_repo.tree()
-        try:
-            ret = tree[self.filename].hexsha
-        except KeyError:
-            # Try to resolve symlinks
-            real_path = os.path.realpath(self.get_filename())
-            project_path = os.path.realpath(self.subproject.get_path())
-
-            if not real_path.startswith(project_path):
-                raise ValueError('Too many symlinks or link outside tree')
-
-            real_path = real_path[len(project_path):].lstrip('/')
-
-            ret = tree[real_path].hexsha
+        ret = self.repository.get_object_hash(self.get_filename())
 
         if self.subproject.has_template():
             ret += ','
-            ret += tree[self.subproject.template].hexsha
+            ret += self.repository.get_object_hash(self.subproject.template)
         return ret
 
     def update_stats(self):
@@ -724,7 +722,8 @@ class Translation(models.Model, URLMixin, PercentMixin):
         except IndexError:
             return None
 
-    def get_last_change(self):
+    @property
+    def last_change(self):
         '''
         Returns date of last change done in Weblate.
         '''
@@ -746,7 +745,7 @@ class Translation(models.Model, URLMixin, PercentMixin):
 
         # Commit changes
         self.git_commit(
-            request, last, self.get_last_change(), True, True, skip_push
+            request, last, self.last_change, True, True, skip_push
         )
 
     def get_author_name(self, user, email=True):
@@ -773,6 +772,7 @@ class Translation(models.Model, URLMixin, PercentMixin):
             'language': self.language_code,
             'language_name': self.language.name,
             'subproject': self.subproject.name,
+            'resource': self.subproject.name,
             'project': self.subproject.project.name,
             'total': self.total,
             'fuzzy': self.fuzzy,
@@ -787,69 +787,33 @@ class Translation(models.Model, URLMixin, PercentMixin):
 
         return msg
 
-    def __configure_git(self, gitrepo, section, key, expected):
-        '''
-        Adjusts git config to ensure that section.key is set to expected.
-        '''
-        cnf = gitrepo.config_writer()
-        try:
-            # Get value and if it matches we're done
-            value = cnf.get(section, key)
-            if value == expected:
-                return
-        except ConfigParser.Error:
-            pass
-
-        # Add section if it does not exist
-        if not cnf.has_section(section):
-            cnf.add_section(section)
-
-        # Update config
-        cnf.set(section, key, expected)
-
-    def __configure_committer(self, gitrepo):
-        '''
-        Wrapper for setting proper committer. As this can not be done by
-        passing parameter, we need to check config on every commit.
-        '''
-        self.__configure_git(
-            gitrepo,
-            'user',
-            'name',
-            self.subproject.project.committer_name
-        )
-        self.__configure_git(
-            gitrepo,
-            'user',
-            'email',
-            self.subproject.project.committer_email
-        )
-
-    def __git_commit(self, gitrepo, author, timestamp, sync=False):
+    def __git_commit(self, author, timestamp, sync=False):
         '''
         Commits translation to git.
         '''
-        # Check git config
-        self.__configure_committer(gitrepo)
 
         # Format commit message
         msg = self.get_commit_message()
 
         # Pre commit hook
         if self.subproject.pre_commit_script != '':
-            ret = os.system('%s "%s"' % (
-                self.subproject.pre_commit_script,
-                self.get_filename()
-            ))
-            if ret != 0:
+            try:
+                subprocess.check_call(
+                    [
+                        self.subproject.pre_commit_script,
+                        self.get_filename()
+                    ],
+                    env=get_clean_env(),
+                )
+            except (OSError, subprocess.CalledProcessError) as err:
                 weblate.logger.error(
-                    'Failed to run pre commit script (%d): %s',
-                    ret,
-                    self.subproject.pre_commit_script
+                    'Failed to run pre commit script %s: %s',
+                    self.subproject.pre_commit_script,
+                    err
                 )
 
         # Create list of files to commit
-        gitrepo.git.add(self.filename)
+        files = [self.filename]
         if self.subproject.extra_commit_file != '':
             extra_file = self.subproject.extra_commit_file % {
                 'language': self.language_code,
@@ -859,13 +823,11 @@ class Translation(models.Model, URLMixin, PercentMixin):
                 extra_file
             )
             if os.path.exists(full_path_extra):
-                gitrepo.git.add(extra_file)
+                files.append(extra_file)
 
         # Do actual commit
-        gitrepo.git.commit(
-            author=author.encode('utf-8'),
-            date=timestamp.isoformat(),
-            m=msg.encode('utf-8'),
+        self.repository.commit(
+            msg, author, timestamp, files
         )
 
         # Optionally store updated hash
@@ -876,11 +838,7 @@ class Translation(models.Model, URLMixin, PercentMixin):
         '''
         Checks whether there are some not committed changes.
         '''
-        status = self.git_repo.git.status('--porcelain', '--', self.filename)
-        if status == '':
-            # No changes to commit
-            return False
-        return True
+        return self.repository.needs_commit(self.filename)
 
     def git_needs_merge(self):
         return self.subproject.git_needs_merge()
@@ -898,8 +856,6 @@ class Translation(models.Model, URLMixin, PercentMixin):
         sync updates git hash stored within the translation (otherwise
         translation rescan will be needed)
         '''
-        gitrepo = self.git_repo
-
         # Is there something for commit?
         if not self.git_needs_commit():
             return False
@@ -923,12 +879,12 @@ class Translation(models.Model, URLMixin, PercentMixin):
         )
         with self.subproject.git_lock:
             try:
-                self.__git_commit(gitrepo, author, timestamp, sync)
-            except git.GitCommandError:
+                self.__git_commit(author, timestamp, sync)
+            except RepositoryException:
                 # There might be another attempt on commit in same time
                 # so we will sleep a bit an retry
                 sleep_while_git_locked()
-                self.__git_commit(gitrepo, author, timestamp, sync)
+                self.__git_commit(author, timestamp, sync)
 
         # Push if we should
         if (self.subproject.project.push_on_commit
@@ -1023,14 +979,23 @@ class Translation(models.Model, URLMixin, PercentMixin):
         '''
         Returns list of failing source checks on current subproject.
         '''
-        result = [('all', _('All strings'))]
+        result = [
+            (
+                'all',
+                _('All strings'),
+                self.total,
+                'success',
+            )
+        ]
 
         # All checks
         sourcechecks = self.unit_set.count_type('sourcechecks', self)
         if sourcechecks > 0:
             result.append((
                 'sourcechecks',
-                _('Strings with any failing checks (%d)') % sourcechecks
+                _('Strings with any failing checks'),
+                sourcechecks,
+                'danger',
             ))
 
         # Process specific checks
@@ -1039,15 +1004,21 @@ class Translation(models.Model, URLMixin, PercentMixin):
                 continue
             cnt = self.get_failing_checks(check)
             if cnt > 0:
-                desc = CHECKS[check].description + (' (%d)' % cnt)
-                result.append((check, desc))
+                result.append((
+                    check,
+                    CHECKS[check].description,
+                    cnt,
+                    CHECKS[check].severity,
+                ))
 
         # Grab comments
         sourcecomments = self.unit_set.count_type('sourcecomments', self)
         if sourcecomments > 0:
             result.append((
                 'sourcecomments',
-                _('Strings with comments (%d)') % sourcecomments
+                _('Strings with comments'),
+                sourcecomments,
+                'info',
             ))
 
         return result
@@ -1056,14 +1027,23 @@ class Translation(models.Model, URLMixin, PercentMixin):
         '''
         Returns list of failing checks on current translation.
         '''
-        result = [('all', _('All strings'))]
+        result = [
+            (
+                'all',
+                _('All strings'),
+                self.total,
+                'success',
+            )
+        ]
 
         # Untranslated strings
         nottranslated = self.unit_set.count_type('untranslated', self)
         if nottranslated > 0:
             result.append((
                 'untranslated',
-                _('Untranslated strings (%d)') % nottranslated
+                _('Untranslated strings'),
+                nottranslated,
+                'danger',
             ))
 
         # Fuzzy strings
@@ -1071,21 +1051,27 @@ class Translation(models.Model, URLMixin, PercentMixin):
         if fuzzy > 0:
             result.append((
                 'fuzzy',
-                _('Fuzzy strings (%d)') % fuzzy
+                _('Fuzzy strings'),
+                fuzzy,
+                'danger',
             ))
 
         # Translations with suggestions
         if self.have_suggestion > 0:
             result.append((
                 'suggestions',
-                _('Strings with suggestions (%d)') % self.have_suggestion
+                _('Strings with suggestions'),
+                self.have_suggestion,
+                'info',
             ))
 
         # All checks
         if self.failing_checks > 0:
             result.append((
                 'allchecks',
-                _('Strings with any failing checks (%d)') % self.failing_checks
+                _('Strings with any failing checks'),
+                self.failing_checks,
+                'danger',
             ))
 
         # Process specific checks
@@ -1094,15 +1080,21 @@ class Translation(models.Model, URLMixin, PercentMixin):
                 continue
             cnt = self.unit_set.count_type(check, self)
             if cnt > 0:
-                desc = CHECKS[check].description + (' (%d)' % cnt)
-                result.append((check, desc))
+                result.append((
+                    check,
+                    CHECKS[check].description,
+                    cnt,
+                    CHECKS[check].severity,
+                ))
 
         # Grab comments
         targetcomments = self.unit_set.count_type('targetcomments', self)
         if targetcomments > 0:
             result.append((
                 'targetcomments',
-                _('Strings with comments (%d)') % targetcomments
+                _('Strings with comments'),
+                targetcomments,
+                'info',
             ))
 
         return result
@@ -1222,17 +1214,20 @@ class Translation(models.Model, URLMixin, PercentMixin):
         '''
         Top level handler for file uploads.
         '''
+        filecopy = fileobj.read()
+        fileobj.close()
         # Load backend file
         try:
             # First try using own loader
             store = self.subproject.file_format_cls(
-                fileobj,
+                StringIOMode(fileobj.name, filecopy),
                 self.subproject.template_store
             )
         except Exception:
             # Fallback to automatic detection
-            fileobj.seek(0)
-            store = AutoFormat(fileobj)
+            store = AutoFormat(
+                StringIOMode(fileobj.name, filecopy),
+            )
 
         # Optionally set authorship
         if author is None:
@@ -1310,3 +1305,9 @@ class Translation(models.Model, URLMixin, PercentMixin):
             'subproject': self.subproject.slug,
             'project': self.subproject.project.slug
         }
+
+    def get_export_url(self):
+        '''
+        Returns URL of exported git repository.
+        '''
+        return self.subproject.get_export_url()

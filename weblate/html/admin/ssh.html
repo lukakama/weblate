@@ -1,5 +1,6 @@
 {% extends "admin/base_site.html" %}
 {% load i18n %}
+{% load cycle from future %}
 
 {% block title %}{% trans "SSH keys" %}{% endblock %}
 
@@ -44,7 +45,7 @@
   </thead>
   <tbody>
     {% for key in host_keys %}
-    <tr class="row{% cycle 1,2 %}"><td>{{ key.0 }}</td><td>{{ key.1 }}</td><td>{{ key.2 }}</td></tr>
+    <tr class="row{% cycle '1' '2' %}"><td>{{ key.0 }}</td><td>{{ key.1 }}</td><td>{{ key.2 }}</td></tr>
     {% endfor %}
   </tbody>
     </table>
@@ -53,7 +54,7 @@
     {% endif %}
 
     <h1>{% trans "Add host key" %}</h1>
-    <p>{% trans "To access SSH hosts, it's host key needs to be verified. You can get the host key entering a domain name or IP for the host in the form below." %}</p>
+    <p>{% trans "To access SSH hosts, it's host key needs to be verified. You can get the host key by entering a domain name or IP for the host in the form below." %}</p>
     <form method="post">
     {% csrf_token %}
     <input type="hidden" name="action" value="add-host" />

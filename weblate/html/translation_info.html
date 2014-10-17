@@ -1,19 +1,18 @@
 {% load i18n %}
+{% load translations %}
 
 {% with object.subproject as object %}
 {% include "subproject_info.html" %}
 {% endwith %}
 
-{% with object.get_translated_percent as percent and object.get_fuzzy_percent as fuzzy and object.get_words_percent as word_percent %}
-
 <tr>
-<th>{% blocktrans with object.total as count %}Strings ({{ count }}):{% endblocktrans %}</th>
-<td><div class="progress" data-value="{{ percent|floatformat:0 }}" data-fuzzy="{{ fuzzy|floatformat:0 }}" data-checks="{{ check_percent|floatformat:0 }}"></div> {{ percent }}%</td>
+<th>{% trans "Strings" %}<span class="badge pull-right">{{ object.total }}</span></th>
+<td class="progress-cell">{% translation_progress object %}</td>
+<td class="percent">{{ object.get_translated_percent }}%</td>
 </tr>
 
 <tr>
-<th>{% blocktrans with object.total_words as count %}Words ({{ count }}):{% endblocktrans %}</th>
-<td><div class="progress" data-value="{{ word_percent|floatformat:0 }}"></div> {{ word_percent }}%</td>
+<th>{% trans "Words" %}<span class="badge pull-right">{{ object.total_words }}</span></th>
+<td class="progress-cell">{% words_progress object %}</td>
+<td class="percent">{{ object.get_words_percent }}%</td>
 </tr>
-
-{% endwith %}

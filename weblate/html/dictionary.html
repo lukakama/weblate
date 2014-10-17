@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% load i18n %}
+{% load translations %}
 {% load url from future %}
+{% load crispy_forms_tags %}
 
 {% block breadcrumbs %}
 <li><a href="{{ project.get_absolute_url }}">{{ project }}</a></li>
@@ -10,50 +12,52 @@
 
 {% block content %}
 
+<ul class="nav nav-pills">
+<li class="active"><a href="#browse" data-toggle="tab">{% trans "Browse" %}</a></li>
+{% if perms.trans.add_dictionary %}
+<li><a href="#add" data-toggle="tab">{% trans "Add new word" %}</a></li>
+{% endif %}
+{% if perms.trans.upload_dictionary %}
+<li><a href="#import" data-toggle="tab">{% trans "Import glossary" %}</a></li>
+{% endif %}
+<li><a href="#export" data-toggle="tab">{% trans "Export glossary" %}</a></li>
+<li><a href="#changes" data-toggle="tab">{% trans "History" %}</a></li>
+</ul>
 
+<div class="tab-content">
+<div class="tab-pane active" id="browse">
+{% include "paginator.html" %}
 
-<h2>{% trans "Glossary" %}</h2>
+<form class="autosubmit paginatoraddon">
+{{ letterform|crispy }}
+</form>
 
-<span class="navi-toolbar ui-widget-header ui-corner-all">
-<span id="navi">
-<a id="button-first" {% if words.number == 1 %}class="button-disabled"{% endif %} href="?page=1&amp;letter={{ letter }}">{% trans "First" %}</a>
-<a id="button-prev" {% if not words.has_previous %}class="button-disabled"{% else %}href="?page={{ words.previous_page_number }}&amp;letter={{ letter }}"{% endif %}>{% trans "Previous" %}</a>
-<a id="button-pos" class="textbutton">{% blocktrans with words.number as position and words.paginator.num_pages as total %}{{ position }} / {{ total }}{% endblocktrans %}</a>
-<a id="button-next" {% if not words.has_next %}class="button-disabled"{% else %}href="?page={{ words.next_page_number }}&amp;letter={{ letter }}"{% endif %}>{% trans "Next" %}</a>
-<a id="button-end" {% if words.paginator.num_pages == words.number %}class="button-disabled"{% endif %} href="?page={{ words.paginator.num_pages }}&amp;letter={{ letter }}">{% trans "Last" %}</a>
-</span>
-<form class="autosubmit">{{ letterform.as_p }}</form>
-</span>
-
-{% if words.object_list %}
-<table>
+{% if page_obj.object_list %}
+<table class="table table-condensed table-striped">
 <thead>
 <tr>
 <th>{% trans "Source" %}</th>
 <th>{% trans "Translation" %}</th>
 <th></th>
-<th></th>
 </tr>
 </thead>
 <tbody>
-{% for word in words.object_list %}
+{% for word in page_obj.object_list %}
 <tr>
-<td class="translatetext">{{ word.source }}</td>
-<td class="translatetext">{{ word.target }}</td>
+<td>{{ word.source }}</td>
+<td>{% format_translation word.target language simple=True %}</td>
 <td>
 {% if perms.trans.change_dictionary %}
-<form action="{% url 'edit_dictionary' project=project.slug lang=language.code %}" method="get">
+<form action="{% url 'edit_dictionary' project=project.slug lang=language.code %}" method="get" class="inlineform">
 <input type="hidden" name="id" value="{{ word.id }}" />
-<input type="submit" class="button" value="{% trans "Edit" %}" />
+<button type="submit" class="btn btn-default btn-sm"><span class="glyphicon glyphicon-pencil"></span> {% trans "Edit" %}</button>
 </form>
 {% endif %}
-</td>
-<td>
 {% if perms.trans.delete_dictionary %}
-<form action="{% url 'delete_dictionary' project=project.slug lang=language.code %}" method="post">
+<form action="{% url 'delete_dictionary' project=project.slug lang=language.code %}" method="post" class="inlineform">
 {% csrf_token %}
 <input type="hidden" name="id" value="{{ word.id }}" />
-<input type="submit" class="button" value="{% trans "Delete" %}" />
+<button type="submit" class="btn btn-default btn-sm"><span class="glyphicon glyphicon-remove"></span> {% trans "Delete" %}</button>
 </form>
 {% endif %}
 </td>
@@ -64,53 +68,51 @@
 {% else %}
 <p>{% trans "No words found!" %}</p>
 {% endif %}
-
-<h2>{% trans "Tools" %}</h2>
-
-<div class="tabs" id="dictionary-tabs">
-<ul>
-{% if perms.trans.add_dictionary %}
-<li><a href="#add">{% trans "Add new word" %}</a></li>
-{% endif %}
-{% if perms.trans.upload_dictionary %}
-<li><a href="#import">{% trans "Import glossary" %}</a></li>
-{% endif %}
-<li><a href="#export">{% trans "Export glossary" %}</a></li>
-<li><a href="#changes">{% trans "History" %}</a></li>
-</ul>
+</div>
 
 {% if perms.trans.add_dictionary %}
-<div id="add">
+<div class="tab-pane" id="add">
 
-<form method="POST">
+<form action="{% url 'show_dictionary' project=project.slug lang=language.code %}" method="POST">
+<div class="panel panel-primary">
+<div class="panel-heading"><h4 class="panel-title">{% trans "Add new word" %}</h4></div>
+  <div class="panel-body">
 {% csrf_token %}
-<table>
-{{ form.as_table }}
-</table>
-<input type="submit" class="button" value="{% trans "Add" %}" />
+{{ form|crispy }}
+</div>
+  <div class="panel-footer">
+<input type="submit" value="{% trans "Add" %}" class="btn btn-default" />
+</div>
+</div>
 </form>
 
 </div>
 {% endif %}
 
 {% if perms.trans.upload_dictionary %}
-<div id="import">
-
-<p>{% trans "You can upload any format which is understood by Translate Toolkit (including TBX, CSV or Gettext PO files)." %}</p>
-
+<div class="tab-pane" id="import">
 <form action="{% url 'upload_dictionary' project=project.slug lang=language.code %}" method="post" enctype="multipart/form-data">
+<div class="panel panel-primary">
+<div class="panel-heading"><h4 class="panel-title">{% trans "Import glossary" %}</h4></div>
+  <div class="panel-body">
+
 {% csrf_token %}
-<table>
-{{ uploadform.as_table }}
-</table>
-<input type="submit" class="button" value="{% trans "Import" %}" />
+{{ uploadform|crispy }}
+</div>
+  <div class="panel-footer">
+<input type="submit" class="btn btn-default" value="{% trans "Import" %}" />
+</div>
+</div>
 </form>
 
 </div>
 {% endif %}
 
-<div id="export">
+<div class="tab-pane" id="export">
 
+<div class="panel panel-primary">
+<div class="panel-heading"><h4 class="panel-title">{% trans "Export glossary" %}</h4></div>
+  <div class="panel-body">
 <p>{% trans "You can download glossary in following formats:" %}</p>
 
 <ul>
@@ -119,9 +121,13 @@
 <li><a href="{% url 'download_dictionary' project=project.slug lang=language.code %}?format=tbx">{% trans "TermBase eXchange (TBX)" %}</a></li>
 </ul>
 </div>
+</div>
+</div>
 
-<div id="changes">
+<div class="tab-pane" id="changes">
 {% include "last-changes.html" %}
+</div>
+
 </div>
 
 {% endblock %}

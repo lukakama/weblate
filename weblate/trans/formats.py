@@ -32,6 +32,7 @@ from translate.storage import mo
 from translate.storage import factory
 from weblate.trans.util import get_string, join_plural, add_configuration_error
 from translate.misc import quote
+from weblate.trans.util import get_clean_env
 import weblate
 import subprocess
 import os.path
@@ -40,11 +41,22 @@ import hashlib
 import traceback
 import importlib
 import __builtin__
+from StringIO import StringIO
 
 
 FILE_FORMATS = {}
 FLAGS_RE = re.compile(r'\b[-\w]+\b')
 LOCATIONS_RE = re.compile(r'^([+-]|.*, [+-]|.*:[+-])')
+
+
+class StringIOMode(StringIO):
+    """
+    StringIO with mode attribute to make ttkit happy.
+    """
+    def __init__(self, filename, data):
+        StringIO.__init__(self, data)
+        self.mode = 'r'
+        self.name = filename
 
 
 def register_fileformat(fileformat):
@@ -684,6 +696,7 @@ class PoFormat(FileFormat):
                     ['msginit', '--help'],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
+                    env=get_clean_env(),
                 )
                 cls.msginit_found = (ret == 0)
             except subprocess.CalledProcessError:
@@ -716,6 +729,7 @@ class PoFormat(FileFormat):
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            env=get_clean_env(),
         )
 
 

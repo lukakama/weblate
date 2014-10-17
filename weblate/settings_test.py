@@ -43,7 +43,7 @@ if 'TRAVIS_DATABASE' in os.environ:
 ADMINS = (('Weblate test', 'noreply@weblate.org'), )
 
 # Different root for test repos
-GIT_ROOT = os.path.join(WEB_ROOT, 'test-repos')
+GIT_ROOT = os.path.join(BASE_DIR, 'test-repos')
 
 # Avoid migrating during testsuite
 SOUTH_TESTS_MIGRATE = False
@@ -95,3 +95,6 @@ LOGGING = {
 
 # Use whiteboard in tests
 ENABLE_WHITEBOARD = True
+
+# Selenium can not clear HttpOnly cookies in MSIE
+SESSION_COOKIE_HTTPONLY = False

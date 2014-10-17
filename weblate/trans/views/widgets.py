@@ -24,7 +24,6 @@ from django.core.urlresolvers import reverse
 from django.views.decorators.cache import cache_page
 
 from weblate.trans.util import get_site_url
-from weblate.trans.models import Project
 from weblate.lang.models import Language
 from weblate.trans.forms import EnageLanguageForm
 from weblate.trans.widgets import WIDGETS
@@ -35,9 +34,6 @@ def widgets_root(request):
     return render(
         request,
         'widgets-root.html',
-        {
-            'projects': Project.objects.all_acl(request.user),
-        }
     )
 
 

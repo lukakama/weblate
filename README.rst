@@ -5,9 +5,9 @@ Weblate
     :alt: Build status
     :target: https://travis-ci.org/nijel/weblate
 
-.. image:: http://l10n.cihar.com/widgets/weblate-shields-badge.svg
+.. image:: http://hosted.weblate.org/widgets/weblate-shields-badge.svg
     :alt: Translation status
-    :target: https://l10n.cihar.com/engage/weblate/?utm_source=widget
+    :target: https://hosted.weblate.org/engage/weblate/?utm_source=widget
 
 .. image:: https://img.shields.io/coveralls/nijel/weblate.svg
     :alt: Coverage Status
@@ -23,7 +23,8 @@ Weblate
 
 Weblate is a free web-based translation tool with tight Git integration. It
 features simple and clean user interface, propagation of translations across
-subprojects, quality checks and automatic linking to source files.
+resources within a project, quality checks and automatic linking to source
+files.
 
 Weblate has it's website at http://weblate.org/.
 
@@ -31,7 +32,7 @@ Features
 --------
 
 * Easy web based translation
-* Propagation of translations across sub-projects (for different branches)
+* Propagation of translations across resources (eg. branches) within projects
 * Tight git integration - every change is represented by Git commit
 * Usage of Django's admin interface
 * Upload and automatic merging of po files

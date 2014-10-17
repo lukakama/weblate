@@ -11,20 +11,20 @@ Notification hooks
 Notification hooks allow external applications to notify Weblate that Git
 repository has been updated.
 
-.. http:get:: /hooks/update/(string:project)/(string:subproject)/
+.. http:get:: /hooks/update/(string:project)/(string:resource)/
 
-   Triggers update of a subproject (pulling from Git and scanning for
+   Triggers update of a resource (pulling from Git and scanning for
    translation changes).
 
 .. http:get:: /hooks/update/(string:project)/
 
-   Triggers update of all subprojects in a project (pulling from Git and
+   Triggers update of all resources in a project (pulling from Git and
    scanning for translation changes).
 
 .. http:post:: /hooks/github/
 
     Special hook for handling GitHub notifications and automatically updating
-    matching subprojects.
+    matching resources.
 
     .. note::
 
@@ -41,7 +41,7 @@ repository has been updated.
 .. http:post:: /hooks/gitlab/
 
     Special hook for handling GitLab notifications and automatically updating
-    matching subprojects.
+    matching resources.
 
     .. seealso:: 
 
@@ -52,7 +52,7 @@ repository has been updated.
 .. http:post:: /hooks/bitbucket/
 
     Special hook for handling Bitbucket notifications and automatically
-    updating matching subprojects.
+    updating matching resources.
 
     .. seealso:: 
 
@@ -68,9 +68,9 @@ Exports
 
 Weblate provides various exports to allow you further process the data.
 
-.. http:get:: /exports/stats/(string:project)/(string:subproject)/
+.. http:get:: /exports/stats/(string:project)/(string:resource)/
 
-    Retrieves statistics for given subproject in JSON format.
+    Retrieves statistics for given resource in JSON format.
 
     You can get pretty-printed output by appending ``?indent=1`` to the
     request.
@@ -94,8 +94,8 @@ Weblate provides various exports to allow you further process the data.
                 "translated": 436, 
                 "translated_percent": 100.0, 
                 "translated_words": 3201, 
-                "url": "http://l10n.cihar.com/engage/weblate/cs/"
-                "url_translate": "http://l10n.cihar.com/projects/weblate/master/cs/"
+                "url": "http://hosted.weblate.org/engage/weblate/cs/"
+                "url_translate": "http://hosted.weblate.org/projects/weblate/master/cs/"
             }, 
             {
                 "code": "nl", 
@@ -111,8 +111,8 @@ Weblate provides various exports to allow you further process the data.
                 "translated": 319, 
                 "translated_percent": 73.2, 
                 "translated_words": 3201, 
-                "url": "http://l10n.cihar.com/engage/weblate/nl/"
-                "url_translate": "http://l10n.cihar.com/projects/weblate/master/nl/"
+                "url": "http://hosted.weblate.org/engage/weblate/nl/"
+                "url_translate": "http://hosted.weblate.org/projects/weblate/master/nl/"
             }, 
             {
                 "code": "el", 
@@ -128,8 +128,8 @@ Weblate provides various exports to allow you further process the data.
                 "translated": 312, 
                 "translated_percent": 71.6, 
                 "translated_words": 3201, 
-                "url": "http://l10n.cihar.com/engage/weblate/el/"
-                "url_translate": "http://l10n.cihar.com/projects/weblate/master/el/"
+                "url": "http://hosted.weblate.org/engage/weblate/el/"
+                "url_translate": "http://hosted.weblate.org/projects/weblate/master/el/"
             }, 
         ]
 
@@ -163,13 +163,13 @@ RSS feeds
 
 Changes in translations are exported in RSS feeds.
 
-.. http:get:: /exports/rss/(string:project)/(string:subproject)/(string:language)/
+.. http:get:: /exports/rss/(string:project)/(string:resource)/(string:language)/
 
     Retrieves RSS feed with recent changes for a translation.
 
-.. http:get:: /exports/rss/(string:project)/(string:subproject)/
+.. http:get:: /exports/rss/(string:project)/(string:resource)/
 
-    Retrieves RSS feed with recent changes for a subproject.
+    Retrieves RSS feed with recent changes for a resource.
 
 .. http:get:: /exports/rss/(string:project)/
 

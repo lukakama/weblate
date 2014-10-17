@@ -22,6 +22,8 @@ import weblate
 from weblate import appsettings
 from datetime import datetime
 from weblate.trans.util import get_site_url
+from weblate.trans.models.project import Project
+from weblate.trans.models.translation import Translation
 
 URL_BASE = 'http://weblate.org/?utm_source=weblate&utm_term=%s'
 URL_DONATE = 'http://weblate.org/donate/?utm_source=weblate&utm_term=%s'
@@ -35,6 +37,18 @@ def weblate_context(request):
         login_redirect_url = request.GET['next']
     else:
         login_redirect_url = request.get_full_path()
+
+    projects = Project.objects.all_acl(request.user)
+
+    # Load user translations if user is authenticated
+    usertranslations = None
+    if request.user.is_authenticated():
+        usertranslations = Translation.objects.filter(
+            language__in=request.user.profile.languages.all(),
+            subproject__project__in=projects,
+        ).order_by(
+            'subproject__project__name', 'subproject__name'
+        ).select_related()
 
     return {
         'version': weblate.VERSION,
@@ -61,4 +75,6 @@ def weblate_context(request):
         'whiteboard_enabled': appsettings.ENABLE_WHITEBOARD,
 
         'registration_open': appsettings.REGISTRATION_OPEN,
+        'acl_projects': projects,
+        'usertranslations': usertranslations,
     }

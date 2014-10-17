@@ -19,6 +19,7 @@
 #
 
 from django.utils.translation import ugettext_lazy as _
+from django.db.models import Count
 from weblate.trans.checks.base import SourceCheck
 import re
 
@@ -35,6 +36,7 @@ class OptionalPluralCheck(SourceCheck):
     description = _(
         'The string is optionally used as plural, but not using plural forms'
     )
+    severity = 'info'
 
     def check_source(self, source, unit):
         if len(source) > 1:
@@ -52,6 +54,7 @@ class EllipsisCheck(SourceCheck):
         u'The string uses three dots (...) '
         u'instead of an ellipsis character (…)'
     )
+    severity = 'warning'
 
     def check_source(self, source, unit):
         return '...' in source[0]
@@ -66,6 +69,7 @@ class MultipleFailingCheck(SourceCheck):
     description = _(
         'The translations in several languages have failing checks'
     )
+    severity = 'warning'
 
     def check_source(self, source, unit):
         from weblate.trans.models.unitdata import Check
@@ -74,5 +78,9 @@ class MultipleFailingCheck(SourceCheck):
             project=unit.translation.subproject.project
         ).exclude(
             language__isnull=True
+        ).values(
+            'language'
+        ).annotate(
+            Count('language')
         )
-        return related.count() > 2
+        return len(related) >= 2

@@ -10,6 +10,9 @@ import json
 import httplib
 import base64
 
+from weblate import appsettings
+from weblate.trans.tests.test_views import RegistrationTestMixin
+
 # Check whether we should run Selenium tests
 DO_SELENIUM = (
     'DO_SELENIUM' in os.environ
@@ -18,7 +21,7 @@ DO_SELENIUM = (
 )
 
 
-class SeleniumTests(LiveServerTestCase):
+class SeleniumTests(LiveServerTestCase, RegistrationTestMixin):
     caps = {
         'browserName': 'firefox',
         'version': '19',
@@ -133,6 +136,89 @@ class SeleniumTests(LiveServerTestCase):
         # We should be back on login page
         self.driver.find_element_by_id('id_username')
 
+    def register_user(self):
+        # open home page
+        self.driver.get('{}{}'.format(self.live_server_url, reverse('home')))
+
+        # registration page
+        self.driver.find_element_by_id('register-button').click()
+
+        # Fill in registration form
+        self.driver.find_element_by_id(
+            'id_email'
+        ).send_keys(
+            'test@example.net'
+        )
+        self.driver.find_element_by_id(
+            'id_username'
+        ).send_keys(
+            'test-example'
+        )
+        self.driver.find_element_by_id(
+            'id_first_name'
+        ).send_keys(
+            'Test Example'
+        )
+        self.driver.find_element_by_xpath(
+            '//input[@value="Register"]'
+        ).click()
+
+        return ''.join(
+            (self.live_server_url, self.assert_registration_mailbox())
+        )
+
+    def test_register(self):
+        """
+        Test registration.
+        """
+        # We don't want captcha
+        appsettings.REGISTRATION_CAPTCHA = False
+
+        url = self.register_user()
+
+        # Confirm account
+        self.driver.get(url)
+
+        # Check we're logged in
+        self.assertTrue(
+            'Test Example' in
+            self.driver.find_element_by_id('profile-button').text
+        )
+
+        # Check we got message
+        self.assertTrue(
+            'You have activated' in
+            self.driver.find_element_by_tag_name('body').text
+        )
+        # Restore
+        appsettings.REGISTRATION_CAPTCHA = True
+
+    def test_register_nocookie(self):
+        """
+        Test registration without cookies.
+
+        See https://github.com/nijel/weblate/issues/518
+        """
+        # We don't want captcha
+        appsettings.REGISTRATION_CAPTCHA = False
+
+        url = self.register_user()
+
+        # Delete all cookies
+        self.driver.delete_all_cookies()
+
+        # Confirm account
+        self.driver.get(url)
+
+        # Check we've failed
+        self.assertTrue(
+            'Missing needed parameter email' in
+            self.driver.find_element_by_class_name('social-auth').text
+        )
+
+        # Restore
+        appsettings.REGISTRATION_CAPTCHA = True
+
 
 # What other platforms we want to test
 EXTRA_PLATFORMS = {
@@ -140,10 +226,10 @@ EXTRA_PLATFORMS = {
         'browserName': 'chrome',
         'platform': 'XP',
     },
-    # 'Opera': {
-    #     'browserName': 'opera',
-    #     'platform': 'WIN7',
-    # },
+    'Opera': {
+        'browserName': 'opera',
+        'platform': 'WIN7',
+    },
     'MSIE10': {
         'browserName': 'internet explorer',
         'version': '10',

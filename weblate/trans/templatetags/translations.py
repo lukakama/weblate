@@ -18,19 +18,17 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from django.template.defaultfilters import stringfilter
 from django.utils.html import escape
 from django.contrib.admin.templatetags.admin_static import static
 from django.utils.safestring import mark_safe
 from django.utils.encoding import force_unicode
 from django.utils.translation import ugettext as _, ungettext, ugettext_lazy
-from django.utils.formats import date_format
 from django.utils import timezone
 from django import template
 
 import re
 
-from datetime import date, datetime
+from datetime import date
 
 import weblate
 
@@ -76,18 +74,23 @@ def fmt_whitespace(value):
     return value
 
 
-@register.filter
-@stringfilter
-def fmttranslation(value, language=None, diff=None, search_match=None):
-    '''
-    Formats translation to show whitespace, plural forms or diff.
-    '''
+@register.inclusion_tag('format-translation.html')
+def format_translation(value, language=None, diff=None, search_match=None,
+                       simple=False):
+    """
+    Nicely formats translation text possibly handling plurals or diff.
+    """
     # Get language
     if language is None:
         language = Language.objects.get_default()
 
     # Split plurals to separate strings
     plurals = split_plural(value)
+
+    # Newline concatenator
+    newline = u'<span class="hlspace" title="{0}">↵</span><br />'.format(
+        _('New line')
+    )
 
     # Split diff plurals
     if diff is not None:
@@ -118,7 +121,7 @@ def fmttranslation(value, language=None, diff=None, search_match=None):
             for variation in re.findall(caseless, value):
                 value = re.sub(
                     caseless,
-                    '<span class="hlmatch">%s</span>' % (variation),
+                    u'<span class="hlmatch">{0}</span>'.format(variation),
                     value,
                 )
 
@@ -132,54 +135,20 @@ def fmttranslation(value, language=None, diff=None, search_match=None):
         paras = [fmt_whitespace(p) for p in paras]
 
         # Show label for plural (if there are any)
+        title = ''
         if len(plurals) > 1:
-            value = '<span class="pluraltxt">%s</span><br />' % (
-                language.get_plural_label(idx)
-            )
-        else:
-            value = ''
+            title = language.get_plural_label(idx)
 
         # Join paragraphs
-        newline = u'<span class="hlspace" title="%s">↵</span><br />' % (
-            _('New line')
-        )
-        value += newline.join(paras)
+        content = mark_safe(newline.join(paras))
 
-        parts.append(value)
+        parts.append({'title': title, 'content': content})
 
-    value = '<hr />'.join(parts)
-
-    return mark_safe(
-        '<span lang="%s" dir="%s" class="direction">%s</span>' %
-        (language.code, language.direction, value)
-    )
-
-
-@register.filter
-@stringfilter
-def fmttranslationdiff(value, other):
-    '''
-    Formats diff between two translations.
-    '''
-    return fmttranslation(value, other.translation.language, other.target)
-
-
-@register.filter
-@stringfilter
-def fmtsearchmatch(value, term):
-    '''
-    Formats terms matching a search query.
-    '''
-    return fmttranslation(value, search_match=term)
-
-
-@register.filter
-@stringfilter
-def fmtsourcediff(value, other):
-    '''
-    Formats diff between two sources.
-    '''
-    return fmttranslation(other.source, diff=value)
+    return {
+        'simple': simple,
+        'items': parts,
+        'language': language,
+    }
 
 
 @register.simple_tag
@@ -280,17 +249,6 @@ def show_checks(checks, user):
         'checks': checks,
         'perms_ignore_check': user.has_perm('trans.ignore_check'),
     }
-
-
-@register.filter
-def gitdate(value):
-    '''
-    Formats timestamp as returned byt GitPython.
-    '''
-    return date_format(
-        datetime.fromtimestamp(value),
-        'DATETIME_FORMAT'
-    )
 
 
 def naturaltime_past(value, now):
@@ -464,3 +422,30 @@ def get_advertisement_html_mail():
     if advertisement is None:
         return ''
     return mark_safe(advertisement.text)
+
+
+def translation_progress_data(translated, fuzzy, checks):
+    return {
+        'good': '{0:f}'.format(translated - checks),
+        'checks': '{0:f}'.format(checks),
+        'fuzzy': '{0:f}'.format(fuzzy),
+        'percent': '{0:f}'.format(translated),
+    }
+
+
+@register.inclusion_tag('progress.html')
+def translation_progress(translation):
+    translated = translation.get_translated_percent()
+    fuzzy = translation.get_fuzzy_percent()
+    checks = translation.get_failing_checks_percent()
+
+    return translation_progress_data(translated, fuzzy, checks)
+
+
+@register.inclusion_tag('progress.html')
+def words_progress(translation):
+    translated = translation.get_words_percent()
+    fuzzy = translation.get_fuzzy_words_percent()
+    checks = translation.get_failing_checks_words_percent()
+
+    return translation_progress_data(translated, fuzzy, checks)

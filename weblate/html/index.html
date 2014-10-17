@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% load i18n %}
+{% load translations %}
 {% load url from future %}
 
 {% block content %}
 
 {% if not user.is_authenticated %}
-<p>
+<p class="alert alert-info">
 {% if demo_server %}
 {% blocktrans %}This site runs <a href="{{ weblate_url }}">Weblate</a> demo server.{% endblocktrans %}
 {% else %}
@@ -16,48 +17,63 @@
 {% endif %}
 
 {% if whiteboard_enabled %}
-<h2>{% trans "Whiteboard" %}</h2>
-
-<div class="tabs" id="whiteboard-tabs">
-    <ul>
-        <li><a href="#messages">{% trans "Messages" %}</a></li>
-        <li><a href="#add">{% trans "Add" %}</a></li>
-    </ul>
-
-    <div id="messages">
-        {% for msg in whiteboard_messages %}
-        <snan class="">{{ msg.message }}</snan>
-        {% endfor %}
-    </div>
-
-    <div id="add">
-        not implemented :(
-    </div>
-</div>
+{% for msg in whiteboard_messages %}
+{% show_message 'info whiteboard' msg.message %}
+{% endfor %}
 {% endif %}
 
-<h2>{% trans "Translations" %}</h2>
-
-<div class="tabs" id="index-tabs">
-<ul>
-{% if usertranslations %}
-<li><a href="#your">{% trans "Your translations" %}</a></li>
+<ul class="nav nav-pills">
+{% if user.is_authenticated %}
+<li class="active"><a href="#your" data-toggle="tab">{% trans "Your translations" %}</a></li>
+<li><a href="#projects" data-toggle="tab">{% trans "Projects" %}</a></li>
+{% else %}
+<li class="active"><a href="#projects" data-toggle="tab">{% trans "Projects" %}</a></li>
 {% endif %}
-<li><a href="#projects">{% trans "Projects" %}</a></li>
-<li><a href="{% url 'languages' %}">{% trans "Languages" %}</a></li>
-<li><a href="{% url 'checks' %}">{% trans "Checks" %}</a></li>
+<li><a href="#search" data-toggle="tab">{% trans "Search" %}</a></li>
+<li><a href="#history" data-toggle="tab">{% trans "History" %}</a></li>
+<li><a href="#activity" data-toggle="tab" data-href="{% url 'view_activity' %}">{% trans "Activity" %}</a></li>
+<li><a href="#stats" data-toggle="tab">{% trans "Statistics" %}</a></li>
+<li class="dropdown">
+  <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+    {% trans "Tools" %} <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu">
+    <li><a href="{% url 'languages' %}">{% trans "Languages summary" %}</a></li>
+    <li><a href="{% url 'checks' %}">{% trans "Checks overview" %}</a></li>
+    <li><a href="{% url 'data_root' %}">{% trans "Data export" %}</a></li>
+    <li><a href="{% url 'widgets_root' %}">{% trans "Widgets" %}</a></li>
+  </ul>
+</li>
 </ul>
 
+<div class="tab-content">
+{% if user.is_authenticated %}
+<div class="tab-pane active" id="your">
+<div class="panel panel-primary">
+<div class="panel-heading"><h4 class="panel-title">{% trans "Your translations" %}</h4></div>
+  <div class="panel-body">
 {% if usertranslations %}
-<div id="your">
 {% with usertranslations as translations and 2 as show_language %}
 {% include "list-translations.html" %}
 {% endwith %}
+{% else %}
+<p class="help-block">{% trans "Choose your languages in preferences and you will get an overview here of available translations for those languages." %}</p>
+{% endif %}
+  </div>
+  <div class="panel-footer">
+  <a class="btn btn-default" href="{% url 'profile' %}#preferences">{% trans "Manage your translations" %}</a>
+  </div>
 </div>
+</div>
+<div class="tab-pane" id="projects">
+{% else %}
+<div class="tab-pane active" id="projects">
 {% endif %}
 
-<div id="projects">
-<table class="sort">
+<div class="panel panel-primary">
+<div class="panel-heading"><h4 class="panel-title">{% trans "Projects" %}</h4></div>
+  <div class="panel-body">
+<table class="sort table">
 <thead>
 <tr>
 <th>{% trans "Project" %}</th>
@@ -68,7 +84,7 @@
 {% with prj.get_translated_percent as percent and prj.get_fuzzy_percent as fuzzy and prj.get_failing_checks_percent as check_percent %}
 <tr>
 <th><a href="{{ prj.get_absolute_url }}">{{ prj }}</a></th>
-<td><div class="progress" data-value="{{ percent|floatformat:0 }}" data-fuzzy="{{ fuzzy|floatformat:0 }}" data-checks="{{ check_percent|floatformat:0 }}"></div></td>
+<td class="progress-cell">{% translation_progress prj %}</td>
 <td class="percent">{{ percent }}%</td>
 </tr>
 {% endwith %}
@@ -78,39 +94,38 @@
 
 {% include "legend.html" %}
 
+  </div>
 {% if offer_hosting %}
-{% url 'hosting' as contact_url %}
-<p>{% blocktrans %}We can host your project as well, if you are interested, please <a href="{{ contact_url }}?subject=Project hosting">contact us</a>.{% endblocktrans %}</p>
+  <div class="panel-footer">
+  <a class="btn btn-default" href="{% url 'hosting' %}">{% trans "Ask for project hosting" %}</a>
+  </div>
 {% endif %}
 </div>
 </div>
 
-<h2>{% trans "Summaries" %}</h2>
+<div class="tab-pane" id="search">
 
-<div class="tabs" id="main-tabs">
+{% include "search-form.html" %}
 
-<ul>
-<li><a href="#changes">{% trans "History" %}</a></li>
-<li><a href="#search">{% trans "Search" %}</a></li>
-<li><a href="#translators">{% trans "Most active translators" %}</a></li>
-<li><a href="#suggesters">{% trans "Most active suggesters" %}</a></li>
-<li><a href="{% url 'view_activity' %}">{% trans "Activity" %}</a></li>
-<li><a href="#others">{% trans "Others" %}</a></li>
-</ul>
-
-<div id="changes">
-{% include "last-changes.html" %}
 </div>
 
-<div id="search">
-<form action="{% url 'search' %}" method="GET">
-{{ search_form.as_p }}
-<input type="submit" value="{% trans "Search" %}" class="button" />
-</form>
+<div class="tab-pane" id="activity">
+<div class="panel panel-primary">
+<div class="panel-heading"><h4 class="panel-title">{% trans "Activity" %}</h4></div>
+<div class="panel-body">
+<p>{% trans "Loading…" %}</p>
 </div>
 
-<div id="translators">
-<table>
+</div>
+</div>
+
+<div class="tab-pane" id="stats">
+<div class="row">
+<div class="col-md-6">
+<div class="panel panel-primary">
+<div class="panel-heading"><h4 class="panel-title">{% trans "Most active translators" %}</h4></div>
+<div class="panel-body">
+<table class="table table-condensed">
 <thead>
 <tr>
 <th>{% trans "User" %}</th>
@@ -126,10 +141,15 @@
 </tbody>
 </table>
 </div>
+</div>
+</div>
 
-<div id="suggesters">
 
-<table>
+<div class="col-md-6">
+<div class="panel panel-primary">
+<div class="panel-heading"><h4 class="panel-title">{% trans "Most active suggesters" %}</h4></div>
+<div class="panel-body">
+<table class="table table-condensed">
 <thead>
 <tr>
 <th>{% trans "User" %}</th>
@@ -145,15 +165,16 @@
 </tbody>
 </table>
 </div>
-
-<div id="others">
-<ul>
-<li><a href="{% url 'languages' %}">{% trans "Languages summary" %}</a></li>
-<li><a href="{% url 'checks' %}">{% trans "Checks overview" %}</a></li>
-<li><a href="{% url 'data_root' %}">{% trans "Data export" %}</a></li>
-<li><a href="{% url 'widgets_root' %}">{% trans "Widgets" %}</a></li>
-</ul>
 </div>
+</div>
+
+</div>
+</div>
+
+<div class="tab-pane" id="history">
+{% include "last-changes.html" %}
+</div>
+
 </div>
 
 {% endblock %}

@@ -29,25 +29,25 @@ Shields.IO badge often used to quickly see status of a project:
 
 .. image:: ../images/weblate-shields-badge.svg
     :alt: Translation status
-    :target: https://l10n.cihar.com/engage/weblate/?utm_source=widget
+    :target: https://hosted.weblate.org/engage/weblate/?utm_source=widget
 
 Small badge often used to quickly see status of a project:
 
 .. image:: ../images/weblate-status-badge.png
     :alt: Translation status
-    :target: https://l10n.cihar.com/engage/weblate/?utm_source=widget
+    :target: https://hosted.weblate.org/engage/weblate/?utm_source=widget
 
 Big badge with status details useful for inclusion on a web page:
 
 .. image:: ../images/weblate-287x66-white.png
     :alt: Translation status
-    :target: https://l10n.cihar.com/engage/weblate/?utm_source=widget
+    :target: https://hosted.weblate.org/engage/weblate/?utm_source=widget
 
 Small badge with status useful for inclusion on a web page:
 
 .. image:: ../images/weblate-88x31-grey.png
     :alt: Translation status
-    :target: https://l10n.cihar.com/engage/weblate/?utm_source=widget
+    :target: https://hosted.weblate.org/engage/weblate/?utm_source=widget
 
 All these badges come with links to simple page which explains users how to
 translate using Weblate:
@@ -63,7 +63,7 @@ Source strings checks
 Weblate includes quite a lot of :ref:`checks`. Some of them also focus on
 quality of source strings. These can give you some hints for making strings
 easier to translate. You can check failing source checks on :guilabel:`Source`
-tab of every subproject.
+tab of every resource.
 
 Failing checks on translation
 +++++++++++++++++++++++++++++
@@ -80,6 +80,6 @@ String comments
 +++++++++++++++
 
 Weblate allows translators to comment on both translation and source strings.
-Each :ref:`subproject` can be configured to receive such comments on email
+Each :ref:`resource` can be configured to receive such comments on email
 address and sending this to developers mailing list is usually best approach.
 This way you can monitor when translators find problems and fix them quickly.

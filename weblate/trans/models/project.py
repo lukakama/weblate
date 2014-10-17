@@ -27,6 +27,7 @@ from django.core.urlresolvers import reverse
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.models import Group
+from django.core.cache import cache
 import os
 import os.path
 from weblate.lang.models import Language
@@ -66,10 +67,21 @@ class ProjectManager(models.Manager):
         and flag whether there is any filtering active.
         """
         projects = self.all()
-        project_ids = [
-            project.id for project in projects if project.has_acl(user)
-        ]
-        if projects.count() == len(project_ids):
+
+        cache_key = 'acl-project-{0}'.format(user.id if user else 'none')
+
+        last_result = cache.get(cache_key)
+        if last_result is not None:
+            all_projects, project_ids = last_result
+        else:
+            project_ids = [
+                project.id for project in projects if project.has_acl(user)
+            ]
+            all_projects = (projects.count() == len(project_ids))
+
+            cache.set(cache_key, (all_projects, project_ids))
+
+        if all_projects:
             return projects, False
         return self.filter(id__in=project_ids), True
 
@@ -432,12 +444,13 @@ class Project(models.Model, PercentMixin, URLMixin, PathMixin):
             ret |= resource.can_push()
         return ret
 
-    def get_last_change(self):
+    @property
+    def last_change(self):
         """
         Returns date of last change done in Weblate.
         """
         resources = self.subproject_set.all()
-        changes = [resource.get_last_change() for resource in resources]
+        changes = [resource.last_change for resource in resources]
         changes = [c for c in changes if c is not None]
         if not changes:
             return None

@@ -1,11 +1,12 @@
 Changes
 =======
 
-weblate 1.10
-------------
+weblate 2.0
+-----------
 
 Released on ? 2014.
 
+* New responsive UI using Bootstrap.
 * Documentation improvements.
 * Added whiteboard for site wide messages.
 * Configurable strings priority.
@@ -13,6 +14,7 @@ Released on ? 2014.
 * Fixed generating mo files in certain cases.
 * Added support for GitLab notifications.
 * Added support for disabling translation suggestions.
+* Django 1.7 support.
 
 weblate 1.9
 -----------
@@ -53,7 +55,7 @@ Released on October 7th 2013.
 
 * Please check manual for upgrade instructions.
 * Support for checking Python brace format string.
-* Per subproject customization of quality checks.
+* Per resource customization of quality checks.
 * Detailed per translation stats.
 * Changed way of linking suggestions, checks and comments to units.
 * Users can now add text to commit message.
@@ -171,7 +173,7 @@ Released on August 14th 2012.
 * New introduction page for engaging people with translating using Weblate.
 * Added widgets which can be used for promoting translation projects.
 * Added option to reset repository to origin (for privileged users).
-* Project or subproject can now be locked for translations.
+* Project or resource can now be locked for translations.
 * Possibility to disable some translations.
 * Configurable options for adding new translations.
 * Configuration of git commits per project.
@@ -195,8 +197,8 @@ weblate 1.1
 Released on July 4th 2012.
 
 * Improved several translations.
-* Better validation while creating subproject.
-* Added support for shared git repositories across subprojects.
+* Better validation while creating resource.
+* Added support for shared git repositories across resources.
 * Do not necessary commit on every attempt to pull remote repo.
 * Added support for offloading indexing.
 
@@ -205,7 +207,7 @@ weblate 1.0
 
 Released on May 10th 2012.
 
-* Improved validation while adding/saving subproject.
+* Improved validation while adding/saving resource.
 * Experimental support for Android resource files (needs patched ttkit).
 * Updates from hooks are run in background.
 * Improved installation instructions.
@@ -227,7 +229,7 @@ Released on April 18th 2012.
 * Update helper scripts to Django 1.4.
 * Improved navigation while translating.
 * Better handling of po file renames.
-* Better validation while creating subproject.
+* Better validation while creating resource.
 * Integrated full setup into syncdb.
 * Added list of recent changes to all translation pages.
 * Check for not translated strings ignores format string only messages.

@@ -42,6 +42,28 @@ from weblate.trans.tests.test_models import RepoTestCase
 from weblate.accounts.models import Profile
 
 
+class RegistrationTestMixin(object):
+    """
+    Helper to share code for registration testing.
+    """
+    def assert_registration_mailbox(self):
+        # Check mailbox
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(
+            mail.outbox[0].subject,
+            '[Weblate] Your registration on Weblate'
+        )
+
+        # Parse URL
+        line = ''
+        for line in mail.outbox[0].body.splitlines():
+            if line.startswith('http://example.com'):
+                break
+
+        # Return confirmation URL
+        return line[18:]
+
+
 class ViewTestCase(RepoTestCase):
     def setUp(self):
         super(ViewTestCase, self).setUp()
@@ -115,7 +137,7 @@ class ViewTestCase(RepoTestCase):
         unit = self.get_unit(source)
         params = {
             'checksum': unit.checksum,
-            'target': target,
+            'target_0': target,
         }
         params.update(kwargs)
         return self.client.post(
@@ -970,22 +992,22 @@ class SearchViewTest(ViewTestCase):
         # Default
         self.do_search(
             {'q': 'hello'},
-            'Current filter: Fulltext search for'
+            'Fulltext search for'
         )
         # Fulltext
         self.do_search(
             {'q': 'hello', 'search': 'ftx'},
-            'Current filter: Fulltext search for'
+            'Fulltext search for'
         )
         # Substring
         self.do_search(
             {'q': 'hello', 'search': 'substring'},
-            'Current filter: Substring search for'
+            'Substring search for'
         )
         # Exact string
         self.do_search(
             {'q': 'Thank you for using Weblate.', 'search': 'exact'},
-            'Current filter: Search for exact string'
+            'Search for exact string'
         )
         # Short string
         self.do_search(
@@ -1013,7 +1035,7 @@ class SearchViewTest(ViewTestCase):
     def test_search_links(self):
         response = self.do_search(
             {'q': 'weblate'},
-            'Current filter: Fulltext search for'
+            'Fulltext search for'
         )
         # Extract search ID
         search_id = re.findall(r'sid=([0-9a-f-]*)&amp', response.content)[0]
@@ -1080,7 +1102,7 @@ class SearchViewTest(ViewTestCase):
     def test_search_type(self):
         self.do_search(
             {'type': 'untranslated'},
-            'Current filter: Untranslated strings'
+            'Untranslated strings'
         )
         self.do_search(
             {'type': 'fuzzy'},
@@ -1136,7 +1158,10 @@ class CommentViewTest(ViewTestCase):
         # Add comment
         response = self.client.post(
             reverse('comment', kwargs={'pk': unit.id}),
-            {'comment': 'New target testing comment'}
+            {
+                'comment': 'New target testing comment',
+                'scope': 'translation',
+            }
         )
         self.assertRedirects(response, unit.get_absolute_url())
 
@@ -1168,7 +1193,7 @@ class CommentViewTest(ViewTestCase):
             reverse('comment', kwargs={'pk': unit.id}),
             {
                 'comment': 'New source testing comment',
-                'type': 'source'
+                'scope': 'global',
             }
         )
         self.assertRedirects(response, unit.get_absolute_url())
@@ -1183,10 +1208,10 @@ class CommentViewTest(ViewTestCase):
             language_code='cs'
         )
         # Check number of comments
-        self.assertFalse(unit.has_comment)
+        self.assertTrue(unit.has_comment)
         self.assertEqual(
             translation.unit_set.count_type('targetcomments', translation),
-            0
+            1
         )
         self.assertEqual(
             translation.unit_set.count_type('sourcecomments', translation),
@@ -1258,10 +1283,10 @@ class HomeViewTest(ViewTestCase):
         msg.save()
 
         response = self.client.get(reverse('home'))
-        self.assertContains(response, 'Whiteboard')
+        self.assertContains(response, 'whiteboard')
         self.assertContains(response, 'test_message')
 
     def test_home_without_whiteboard(self):
         appsettings.ENABLE_WHITEBOARD = False
         response = self.client.get(reverse('home'))
-        self.assertNotContains(response, 'Whiteboard')
+        self.assertNotContains(response, 'whiteboard')

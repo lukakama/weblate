@@ -33,7 +33,6 @@ from django.utils import translation as django_translation
 from django.template.loader import render_to_string
 from django.core.mail import EmailMultiAlternatives
 
-from south.signals import post_migrate
 from social.apps.django_app.default.models import UserSocialAuth
 
 from weblate.lang.models import Language
@@ -367,7 +366,8 @@ class Profile(models.Model):
 
     subscriptions = models.ManyToManyField(
         'trans.Project',
-        verbose_name=_('Subscribed projects')
+        verbose_name=_('Subscribed projects'),
+        blank=True,
     )
 
     subscribe_any_translation = models.BooleanField(
@@ -399,6 +399,16 @@ class Profile(models.Model):
         default=False
     )
 
+    SUBSCRIPTION_FIELDS = (
+        'subscribe_any_translation',
+        'subscribe_new_string',
+        'subscribe_new_suggestion',
+        'subscribe_new_contributor',
+        'subscribe_new_comment',
+        'subscribe_merge_failure',
+        'subscribe_new_language',
+    )
+
     objects = ProfileManager()
 
     def __unicode__(self):
@@ -419,7 +429,8 @@ class Profile(models.Model):
             'user': self.user.username
         })
 
-    def get_last_change(self):
+    @property
+    def last_change(self):
         '''
         Returns date of last change user has done in Weblate.
         '''
@@ -706,7 +717,6 @@ def remove_user(user):
 
 
 @receiver(post_syncdb)
-@receiver(post_migrate)
 def sync_create_groups(sender, app, **kwargs):
     '''
     Create groups on syncdb.
@@ -714,6 +724,10 @@ def sync_create_groups(sender, app, **kwargs):
     if (app == 'accounts'
             or getattr(app, '__name__', '') == 'weblate.accounts.models'):
         create_groups(False)
+
+if 'south' in settings.INSTALLED_APPS:
+    from south.signals import post_migrate
+    post_migrate.connect(sync_create_groups)
 
 
 @receiver(post_save, sender=User)

@@ -1,7 +1,7 @@
 Contributing
 ============
 
-There are dozens od ways to contribute to Weblate. We welcome any help, be it
+There are dozens of ways to contribute to Weblate. We welcome any help, be it
 coding help, graphics design, documentation or sponsorship.
 
 Code and development
@@ -19,6 +19,6 @@ Travis <https://travis-ci.org/nijel/weblate> and coverage on Coveralls
 Translating
 -----------
 
-Weblate is being translated using Weblate on <https://l10n.cihar.com/>, feel
+Weblate is being translated using Weblate on <https://hosted.weblate.org/>, feel
 free to join us in effort to make Weblate available in as many world languages
 as possible.

@@ -1,14 +1,18 @@
 {% load url from future %}
 {% load translations %}
 {% load i18n %}
+{% load crispy_forms_tags %}
 
-<table>
+<div class="row">
+<div class="col-md-6">
+<table class="table table-condensed table-striped">
 <thead>
 <tr>
 <th>{% trans "Language" %}</th>
 <th>{% trans "Status" %}</th>
 <th>{% trans "Checks" %}</th>
 <th>{% trans "Edit" %}</th>
+</tr>
 </thead>
 <tbody>
 {% for unit in units %}
@@ -21,3 +25,38 @@
 {% endfor %}
 </tbody>
 </table>
+</div>
+
+<div class="col-md-6">
+<table class="table table-condensed">
+{% if perms.edit_priority %}
+<tr>
+<td>
+<form method="POST" action="{% url 'edit_priority' pk=source.pk %}">
+{% csrf_token %}
+<input type="hidden" name="next" value="{{ next }}" />
+{{ priority_form|crispy }}
+<input type="submit" value="{% trans "Save" %}" class="btn btn-default" />
+</form>
+</td>
+</tr>
+{% endif %}
+{% with units.0 as unit %}
+{% include "unit-details.html" %}
+{% with unit.get_source_comments as comments %}
+{% if comments %}
+<tr>
+<th>{% trans "User comments" %}</th>
+</tr>
+<tr>
+<td>
+{% include "list-comments.html" %}
+</td>
+</tr>
+{% endif %}
+{% endwith %}
+{% endwith %}
+</table>
+</div>
+
+</div>

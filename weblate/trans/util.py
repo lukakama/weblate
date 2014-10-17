@@ -24,6 +24,7 @@ from django.core.cache import cache
 from importlib import import_module
 import time
 import random
+import os
 
 PLURAL_SEPARATOR = '\x1e\x1e'
 
@@ -144,3 +145,15 @@ def get_configuration_errors():
     Returns all configuration errors.
     """
     return cache.get('configuration-errors', [])
+
+
+def get_clean_env():
+    """
+    Returns cleaned up environment for subprocess execution.
+    """
+    environ = {}
+    variables = ('HOME', 'PATH', 'LANG')
+    for var in variables:
+        if var in os.environ:
+            environ[var] = os.environ[var]
+    return environ

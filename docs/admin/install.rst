@@ -10,13 +10,11 @@ Requirements
 
 Python (2.7)
     https://www.python.org/
-Django (>= 1.5) (Django 1.6 is supported since Weblate 1.9)
+Django (>= 1.6)
     https://www.djangoproject.com/
 Translate-toolkit (>= 1.9.0, 1.10.0 or newer strongly recommended)
     http://toolkit.translatehouse.org/
-GitPython (>= 0.3.2)
-    https://github.com/gitpython-developers/GitPython
-Git (>= 1.7.2)
+Git (>= 1.6)
     http://git-scm.com/
 python-social-auth (>= 0.1.17, < 0.1.24)
     http://psa.matiasaguirre.net/
@@ -26,8 +24,10 @@ PIL or Pillow library
     https://python-pillow.github.io/
 lxml (>= 3.1.0)
     http://lxml.de/
-South (>= 1.0)
+South (>= 1.0) (needed for Django < 1.7)
     http://south.aeracode.org/
+dateutil
+    http://labix.org/python-dateutil
 libravatar (optional for federated avatar support)
     https://pypi.python.org/pypi/pyLibravatar
 PyICU (optional for proper sorting of strings)
@@ -45,7 +45,7 @@ you can use apt-get:
 
 .. code-block:: sh
 
-    apt-get install python-django translate-toolkit python-git \
+    apt-get install python-django translate-toolkit \
         python-whoosh python-pil python-django-south python-libravatar \
         python-pyicu python-babel
 
@@ -75,7 +75,7 @@ All requirements are available either directly in openSUSE or in
 
 .. code-block:: sh
 
-    zypper install python-Django python-icu translate-toolkit python-GitPython \
+    zypper install python-Django python-icu translate-toolkit \
         python-Whoosh python-Pillow python-South python-python-social-auth \
         python-babel
 
@@ -84,7 +84,7 @@ Requirements on OSX
 +++++++++++++++++++
 
 If your python was not installed using brew, make sure you have this in
-your .bash_profile file or executed somehow:
+your :file:`.bash_profile` file or executed somehow:
 
 .. code-block:: sh
 
@@ -356,7 +356,7 @@ recommended to use separate, file backed cache for this purpose:
         },
         'avatar': {
             'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
-            'LOCATION': os.path.join(WEB_ROOT, 'avatar-cache'),
+            'LOCATION': os.path.join(BASE_DIR, 'avatar-cache'),
             'TIMEOUT': 604800,
             'OPTIONS': {
                 'MAX_ENTRIES': 1000,
@@ -460,7 +460,7 @@ example to set it to ``configuration`` directory under Weblate tree:
 
 .. code-block:: python
 
-    os.environ['HOME'] = os.path.join(WEB_ROOT, 'configuration')
+    os.environ['HOME'] = os.path.join(BASE_DIR, 'configuration')
 
 .. note::
 
@@ -498,7 +498,17 @@ Running server
 --------------
 
 Running Weblate is not different from running any other Django based
-application.
+application. Django is usually executed as uwsgi or fcgi (see examples for
+different webservers below).
+
+For testing purposes, you can use Django builtin web server:
+
+.. code-block:: sh
+
+    ./manage.py runserver
+
+Serving static files
+++++++++++++++++++++
 
 It is recommended to serve static files directly by your web server, you should
 use that for following paths:
